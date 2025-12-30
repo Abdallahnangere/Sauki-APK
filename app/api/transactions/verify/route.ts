@@ -24,7 +24,7 @@ export async function POST(req: Request) {
 
             const flwData = flwVerify.data.data;
 
-            if (flwVerify.data.status === 'success' && flwData.status === 'successful') {
+            if (flwVerify.data.status === 'success' && (flwData.status === 'successful' || flwData.status === 'completed')) {
                 await prisma.transaction.update({
                     where: { id: transaction.id },
                     data: { status: 'paid', paymentData: JSON.stringify(flwData) }
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
         }
     }
 
-    // 2. AUTO-DELIVERY LOGIC
+    // 2. AUTO-DELIVERY LOGIC (Retry)
     // If status is PAID (either just now or previously), but not delivered, retry delivery.
     if (currentStatus === 'paid' && transaction.type === 'data') {
         
@@ -45,6 +45,7 @@ export async function POST(req: Request) {
         if (plan) {
             const networkId = AMIGO_NETWORKS[plan.network];
             
+            // Match Console Payload
             const amigoPayload = {
                 network: networkId,
                 mobile_number: transaction.phone,

@@ -18,7 +18,7 @@ export async function POST(req: Request) {
         const networkId = AMIGO_NETWORKS[plan.network];
         const idempotencyKey = `MANUAL-${uuidv4()}`;
         
-        // Exact payload structure
+        // Exact payload structure matching the working Console
         const amigoPayload = {
             network: networkId,
             mobile_number: phone,
@@ -26,13 +26,16 @@ export async function POST(req: Request) {
             Ported_number: true
         };
 
-        // Ensure endpoint has trailing slash if that's what works, or just /data/
+        console.log(`[Manual Topup] Sending to Amigo:`, amigoPayload);
+
+        // Use same endpoint as console
         const amigoRes = await callAmigoAPI('/data/', amigoPayload, idempotencyKey);
 
         const isSuccess = amigoRes.success && (
             amigoRes.data.success === true || 
             amigoRes.data.Status === 'successful' || 
-            amigoRes.data.status === 'delivered'
+            amigoRes.data.status === 'delivered' ||
+            amigoRes.data.status === 'successful'
         );
         
         const transaction = await prisma.transaction.create({

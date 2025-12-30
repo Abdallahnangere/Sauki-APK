@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { cn, formatCurrency } from '../../lib/utils';
-import { Loader2, Upload, Lock, Trash2, Edit2, Send, Download, Search, Package, Wifi, LayoutDashboard, LogOut, Terminal, Play, RotateCcw, Megaphone } from 'lucide-react';
+import { Loader2, Upload, Lock, Trash2, Edit2, Send, Download, Search, Package, Wifi, LayoutDashboard, LogOut, Terminal, Play, RotateCcw, Megaphone, CreditCard, Wallet, Activity } from 'lucide-react';
 import { DataPlan, Product, Transaction } from '../../types';
 import { SharedReceipt } from '../../components/SharedReceipt';
 import { toPng } from 'html-to-image';
@@ -10,7 +10,7 @@ import { toPng } from 'html-to-image';
 export default function AdminPage() {
   const [password, setPassword] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [view, setView] = useState<'dashboard' | 'products' | 'plans' | 'orders' | 'transactions' | 'manual' | 'console' | 'broadcast'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'products' | 'plans' | 'orders' | 'transactions' | 'manual' | 'console' | 'broadcast' | 'flw_console'>('dashboard');
   const [loading, setLoading] = useState(false);
   
   // Data
@@ -27,37 +27,47 @@ export default function AdminPage() {
   // Broadcast Form
   const [broadcastForm, setBroadcastForm] = useState({ content: '', type: 'info', isActive: true });
   
-  // Console State
+  // Amigo Console State
   const [consoleEndpoint, setConsoleEndpoint] = useState('/data/');
   const [consolePayload, setConsolePayload] = useState('{\n  "network": 1,\n  "mobile_number": "09000000000",\n  "plan": 1001,\n  "Ported_number": true\n}');
   const [consoleHistory, setConsoleHistory] = useState<Array<{ type: 'req' | 'res', data: any, time: string }>>([]);
   const consoleEndRef = useRef<HTMLDivElement>(null);
+
+  // Flutterwave Console State
+  const [flwEndpoint, setFlwEndpoint] = useState('/balances');
+  const [flwMethod, setFlwMethod] = useState('GET');
+  const [flwPayload, setFlwPayload] = useState('{}');
+  const [flwHistory, setFlwHistory] = useState<Array<{ type: 'req' | 'res', data: any, time: string }>>([]);
+  const flwEndRef = useRef<HTMLDivElement>(null);
 
   // Receipt
   const receiptRef = useRef<HTMLDivElement>(null);
   const [receiptTx, setReceiptTx] = useState<Transaction | null>(null);
 
   useEffect(() => {
-    if (isAuthenticated && view !== 'console') fetchData();
+    if (isAuthenticated && view !== 'console' && view !== 'flw_console') fetchData();
   }, [isAuthenticated, view]);
 
   useEffect(() => {
-    if (view === 'console') {
-        consoleEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [consoleHistory, view]);
+    if (view === 'console') consoleEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (view === 'flw_console') flwEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [consoleHistory, flwHistory, view]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
         const [pRes, plRes, txRes] = await Promise.all([
-            fetch('/api/products').then(r => r.json()),
-            fetch('/api/data-plans').then(r => r.json()),
-            fetch('/api/transactions/list').then(r => r.json())
+            fetch('/api/products').then(r => r.json()).catch(() => []),
+            fetch('/api/data-plans').then(r => r.json()).catch(() => []),
+            fetch('/api/transactions/list').then(r => r.json()).catch(() => [])
         ]);
-        setProducts(pRes);
-        setPlans(plRes);
-        setTransactions(txRes);
+        
+        if (Array.isArray(pRes)) setProducts(pRes);
+        if (Array.isArray(plRes)) setPlans(plRes);
+        if (Array.isArray(txRes)) setTransactions(txRes);
+        
+    } catch (e) {
+        console.error("Failed to load data", e);
     } finally {
         setLoading(false);
     }
@@ -175,7 +185,6 @@ export default function AdminPage() {
       }, 500);
   };
 
-  // Safe accessor for receipt description
   const getTransactionDescription = (tx: Transaction) => {
       if (tx.type === 'data') {
           if (tx.dataPlan) {
@@ -192,7 +201,7 @@ export default function AdminPage() {
       return 'Item Order';
   };
 
-  // Console Functions
+  // --- AMIGO CONSOLE ---
   const sendConsoleRequest = async () => {
       let parsedPayload;
       try {
@@ -220,6 +229,50 @@ export default function AdminPage() {
       }
   };
 
+  // --- FLUTTERWAVE CONSOLE ---
+  const sendFlwRequest = async () => {
+      let parsedPayload;
+      try {
+          parsedPayload = JSON.parse(flwPayload);
+      } catch (e) {
+          alert("Invalid JSON Format");
+          return;
+      }
+
+      const timestamp = new Date().toLocaleTimeString();
+      setFlwHistory(prev => [...prev, { type: 'req', data: { method: flwMethod, endpoint: flwEndpoint, payload: parsedPayload }, time: timestamp }]);
+      setLoading(true);
+
+      try {
+          const res = await fetch('/api/admin/console/flutterwave', {
+              method: 'POST',
+              body: JSON.stringify({ endpoint: flwEndpoint, method: flwMethod, payload: parsedPayload, password })
+          });
+          const data = await res.json();
+          setFlwHistory(prev => [...prev, { type: 'res', data: data, time: new Date().toLocaleTimeString() }]);
+      } catch (e: any) {
+          setFlwHistory(prev => [...prev, { type: 'res', data: { error: e.message }, time: new Date().toLocaleTimeString() }]);
+      } finally {
+          setLoading(false);
+      }
+  };
+
+  const loadFlwTemplate = (type: 'balance' | 'verify' | 'banks') => {
+      if (type === 'balance') {
+          setFlwMethod('GET');
+          setFlwEndpoint('/balances');
+          setFlwPayload('{}');
+      } else if (type === 'verify') {
+          setFlwMethod('GET');
+          setFlwEndpoint('/transactions/verify_by_reference?tx_ref=TX_REF_HERE');
+          setFlwPayload('{}');
+      } else if (type === 'banks') {
+          setFlwMethod('GET');
+          setFlwEndpoint('/banks/NG');
+          setFlwPayload('{}');
+      }
+  };
+
   if (!isAuthenticated) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-100">
         <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm text-center border border-slate-200">
@@ -240,7 +293,7 @@ export default function AdminPage() {
                 <h1 className="text-xl font-black tracking-tight">SAUKI ADMIN</h1>
                 <p className="text-slate-500 text-xs mt-1">v2.0.0 Pro</p>
             </div>
-            <nav className="flex-1 p-4 space-y-2">
+            <nav className="flex-1 p-4 space-y-2 overflow-y-auto no-scrollbar">
                 {[
                     { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
                     { id: 'orders', label: 'Store Orders', icon: Package },
@@ -250,6 +303,7 @@ export default function AdminPage() {
                     { id: 'manual', label: 'Manual Topup', icon: Send },
                     { id: 'broadcast', label: 'App Broadcast', icon: Megaphone },
                     { id: 'console', label: 'Amigo Console', icon: Terminal },
+                    { id: 'flw_console', label: 'Flutterwave', icon: CreditCard },
                 ].map(item => (
                     <button key={item.id} onClick={() => setView(item.id as any)} className={cn("flex items-center gap-3 w-full p-3 rounded-lg text-sm font-medium transition-colors", view === item.id ? "bg-blue-600 text-white shadow-lg" : "text-slate-400 hover:bg-slate-800 hover:text-white")}>
                         <item.icon className="w-4 h-4" /> {item.label}
@@ -285,11 +339,12 @@ export default function AdminPage() {
 
             <header className="flex justify-between items-center mb-8">
                 <div>
-                    <h2 className="text-2xl font-bold text-slate-900 capitalize">{view}</h2>
+                    <h2 className="text-2xl font-bold text-slate-900 capitalize">{view === 'flw_console' ? 'Flutterwave Console' : view}</h2>
                     <p className="text-slate-500 text-sm">Manage your platform efficiently.</p>
                 </div>
             </header>
 
+            {/* DASHBOARD */}
             {view === 'dashboard' && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
@@ -307,6 +362,7 @@ export default function AdminPage() {
                 </div>
             )}
 
+            {/* BROADCAST */}
             {view === 'broadcast' && (
                 <div className="max-w-xl mx-auto bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
                     <h2 className="font-bold text-2xl text-slate-900 mb-6 flex items-center gap-2"><Megaphone className="w-6 h-6 text-blue-600" /> Broadcast System</h2>
@@ -339,9 +395,9 @@ export default function AdminPage() {
                 </div>
             )}
 
+            {/* AMIGO CONSOLE */}
             {view === 'console' && (
                 <div className="flex flex-col lg:flex-row gap-6 h-[70vh]">
-                     {/* Chat Area (Left/Top) */}
                      <div className="flex-1 bg-slate-900 rounded-2xl shadow-xl flex flex-col overflow-hidden border border-slate-800">
                          <div className="bg-slate-800 p-4 border-b border-slate-700 flex justify-between items-center">
                              <div className="flex items-center gap-2">
@@ -366,7 +422,6 @@ export default function AdminPage() {
                          </div>
                      </div>
 
-                     {/* Input Area (Right/Bottom) */}
                      <div className="w-full lg:w-96 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col p-4">
                          <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">Payload Builder</h3>
                          
@@ -391,7 +446,76 @@ export default function AdminPage() {
                 </div>
             )}
 
-            {/* Rest of the views (orders, transactions, etc) remain the same as previous file but are implicitly included here as I am outputting full file content */}
+            {/* FLUTTERWAVE CONSOLE */}
+            {view === 'flw_console' && (
+                <div className="flex flex-col lg:flex-row gap-6 h-[70vh]">
+                     {/* Chat Area */}
+                     <div className="flex-1 bg-slate-900 rounded-2xl shadow-xl flex flex-col overflow-hidden border border-slate-800">
+                         <div className="bg-slate-800 p-4 border-b border-slate-700 flex justify-between items-center">
+                             <div className="flex items-center gap-2">
+                                 <CreditCard className="w-4 h-4 text-orange-400" />
+                                 <span className="text-white font-mono text-sm">Flutterwave V3</span>
+                             </div>
+                             <div className="flex gap-2">
+                                <button onClick={() => loadFlwTemplate('balance')} className="px-2 py-1 bg-slate-700 rounded text-xs text-orange-200 hover:bg-slate-600">Balance</button>
+                                <button onClick={() => loadFlwTemplate('verify')} className="px-2 py-1 bg-slate-700 rounded text-xs text-orange-200 hover:bg-slate-600">Verify Tx</button>
+                                <button onClick={() => setFlwHistory([])} className="text-xs text-slate-400 hover:text-white flex items-center gap-1"><RotateCcw className="w-3 h-3" /> Clear</button>
+                             </div>
+                         </div>
+                         <div className="flex-1 p-4 overflow-y-auto space-y-4 font-mono text-sm">
+                             {flwHistory.length === 0 && (
+                                 <div className="text-slate-600 text-center mt-20 italic">
+                                     <Wallet className="w-12 h-12 mx-auto mb-2 opacity-20" />
+                                     Interact with Flutterwave directly.
+                                 </div>
+                             )}
+                             {flwHistory.map((item, i) => (
+                                 <div key={i} className={cn("flex flex-col max-w-[90%]", item.type === 'req' ? 'self-end items-end' : 'self-start items-start')}>
+                                     <div className={cn("px-4 py-3 rounded-2xl mb-1 border shadow-sm whitespace-pre-wrap break-all", item.type === 'req' ? 'bg-orange-600 text-white border-orange-500 rounded-tr-none' : 'bg-slate-800 text-orange-400 border-slate-700 rounded-tl-none')}>
+                                         {item.type === 'req' && <div className="text-[10px] opacity-70 mb-1 border-b border-white/20 pb-1">{item.data.method} {item.data.endpoint}</div>}
+                                         {JSON.stringify(item.data.payload || item.data, null, 2)}
+                                     </div>
+                                     <span className="text-[10px] text-slate-500 px-1">{item.time} • {item.type === 'req' ? 'Sent' : 'Received'}</span>
+                                 </div>
+                             ))}
+                             <div ref={flwEndRef} />
+                         </div>
+                     </div>
+
+                     {/* Input Area */}
+                     <div className="w-full lg:w-96 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col p-4">
+                         <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">Request Builder</h3>
+                         
+                         <div className="flex gap-2 mb-4">
+                             <div className="w-1/3">
+                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Method</label>
+                                 <select className="w-full border p-2 rounded-lg font-mono text-sm bg-slate-50 h-10" value={flwMethod} onChange={e => setFlwMethod(e.target.value)}>
+                                     <option value="GET">GET</option>
+                                     <option value="POST">POST</option>
+                                 </select>
+                             </div>
+                             <div className="w-2/3">
+                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Endpoint</label>
+                                 <input className="w-full border p-2 rounded-lg font-mono text-sm bg-slate-50 h-10" value={flwEndpoint} onChange={e => setFlwEndpoint(e.target.value)} />
+                             </div>
+                         </div>
+
+                         <div className="flex-1 mb-4 flex flex-col">
+                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">JSON Payload</label>
+                             <textarea 
+                                className="w-full flex-1 border p-3 rounded-lg font-mono text-sm bg-slate-900 text-orange-200 focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none leading-relaxed" 
+                                value={flwPayload}
+                                onChange={e => setFlwPayload(e.target.value)}
+                             />
+                         </div>
+
+                         <button onClick={sendFlwRequest} disabled={loading} className="w-full bg-orange-600 text-white h-12 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-orange-700 transition shadow-lg shadow-orange-100">
+                             {loading ? <Loader2 className="animate-spin" /> : <><Activity className="w-4 h-4" /> Execute Command</>}
+                         </button>
+                     </div>
+                </div>
+            )}
+
             {view === 'orders' && (
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                     <div className="p-6 border-b border-slate-100 flex justify-between items-center">
@@ -408,21 +532,25 @@ export default function AdminPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {transactions.filter(t => t.type === 'ecommerce').map(tx => (
-                                <tr key={tx.id} className="hover:bg-slate-50">
-                                    <td className="p-4">
-                                        <div className="font-bold text-slate-900">{tx.customerName || 'N/A'}</div>
-                                        <div className="text-xs text-slate-500">{tx.phone}</div>
-                                        <div className="text-xs text-slate-400">{tx.deliveryState}</div>
-                                    </td>
-                                    <td className="p-4 text-slate-600">{tx.product?.name || tx.productId?.slice(0,8)}</td>
-                                    <td className="p-4"><span className={cn("px-2 py-1 rounded-full text-xs font-bold uppercase", tx.status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700')}>{tx.status}</span></td>
-                                    <td className="p-4 font-bold">{formatCurrency(tx.amount)}</td>
-                                    <td className="p-4">
-                                        <button onClick={() => generateReceipt(tx)} className="text-blue-600 hover:text-blue-800 text-xs font-bold flex items-center gap-1"><Download className="w-3 h-3" /> Receipt</button>
-                                    </td>
-                                </tr>
-                            ))}
+                            {transactions.filter(t => t.type === 'ecommerce').length === 0 ? (
+                                <tr><td colSpan={5} className="p-8 text-center text-slate-500">No orders yet.</td></tr>
+                            ) : (
+                                transactions.filter(t => t.type === 'ecommerce').map(tx => (
+                                    <tr key={tx.id} className="hover:bg-slate-50">
+                                        <td className="p-4">
+                                            <div className="font-bold text-slate-900">{tx.customerName || 'N/A'}</div>
+                                            <div className="text-xs text-slate-500">{tx.phone}</div>
+                                            <div className="text-xs text-slate-400">{tx.deliveryState}</div>
+                                        </td>
+                                        <td className="p-4 text-slate-600">{tx.product?.name || tx.productId?.slice(0,8)}</td>
+                                        <td className="p-4"><span className={cn("px-2 py-1 rounded-full text-xs font-bold uppercase", tx.status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700')}>{tx.status}</span></td>
+                                        <td className="p-4 font-bold">{formatCurrency(tx.amount)}</td>
+                                        <td className="p-4">
+                                            <button onClick={() => generateReceipt(tx)} className="text-blue-600 hover:text-blue-800 text-xs font-bold flex items-center gap-1"><Download className="w-3 h-3" /> Receipt</button>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
                     </table>
                 </div>
@@ -447,21 +575,25 @@ export default function AdminPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {transactions.map(tx => (
-                                    <tr key={tx.id} className="hover:bg-slate-50">
-                                        <td className="p-4">
-                                            <div className="font-mono text-xs font-bold text-slate-700">{tx.tx_ref}</div>
-                                            <div className="text-xs text-slate-400">{new Date(tx.createdAt).toLocaleString()}</div>
-                                        </td>
-                                        <td className="p-4 capitalize">{tx.type === 'ecommerce' ? 'Devices' : 'Data Bundle'}</td>
-                                        <td className="p-4 text-xs text-slate-600">{getTransactionDescription(tx)}</td>
-                                        <td className="p-4"><span className={cn("px-2 py-1 rounded-full text-xs font-bold uppercase", tx.status === 'delivered' ? 'bg-green-100 text-green-700' : tx.status === 'paid' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500')}>{tx.status}</span></td>
-                                        <td className="p-4 font-bold">{formatCurrency(tx.amount)}</td>
-                                        <td className="p-4">
-                                            <button onClick={() => generateReceipt(tx)} className="text-blue-600 hover:text-blue-800 text-xs font-bold flex items-center gap-1"><Download className="w-3 h-3" /> Receipt</button>
-                                        </td>
-                                    </tr>
-                                ))}
+                                {transactions.length === 0 ? (
+                                    <tr><td colSpan={6} className="p-8 text-center text-slate-500">No transactions recorded.</td></tr>
+                                ) : (
+                                    transactions.map(tx => (
+                                        <tr key={tx.id} className="hover:bg-slate-50">
+                                            <td className="p-4">
+                                                <div className="font-mono text-xs font-bold text-slate-700">{tx.tx_ref}</div>
+                                                <div className="text-xs text-slate-400">{new Date(tx.createdAt).toLocaleString()}</div>
+                                            </td>
+                                            <td className="p-4 capitalize">{tx.type === 'ecommerce' ? 'Devices' : 'Data Bundle'}</td>
+                                            <td className="p-4 text-xs text-slate-600">{getTransactionDescription(tx)}</td>
+                                            <td className="p-4"><span className={cn("px-2 py-1 rounded-full text-xs font-bold uppercase", tx.status === 'delivered' ? 'bg-green-100 text-green-700' : tx.status === 'paid' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500')}>{tx.status}</span></td>
+                                            <td className="p-4 font-bold">{formatCurrency(tx.amount)}</td>
+                                            <td className="p-4">
+                                                <button onClick={() => generateReceipt(tx)} className="text-blue-600 hover:text-blue-800 text-xs font-bold flex items-center gap-1"><Download className="w-3 h-3" /> Receipt</button>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
                             </tbody>
                         </table>
                     </div>
@@ -499,21 +631,25 @@ export default function AdminPage() {
                             <button onClick={() => { setEditMode(false); setProductForm({}); setPlanForm({}); }} className="text-blue-600 text-sm font-bold">+ Add New</button>
                          </div>
                          <div className="max-h-[600px] overflow-y-auto p-4 space-y-2">
-                            {(view === 'products' ? products : plans).map((item: any) => (
-                                <div key={item.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-100">
-                                    <div className="flex items-center gap-4">
-                                        {view === 'products' && <img src={item.image} className="w-10 h-10 object-contain rounded-md bg-white border" />}
-                                        <div>
-                                            <div className="font-bold text-slate-900">{item.name || `${item.network} ${item.data}`}</div>
-                                            <div className="text-xs text-slate-500">{formatCurrency(item.price)}</div>
+                            {(view === 'products' ? products : plans).length === 0 ? (
+                                <p className="text-center p-8 text-slate-500">No items found.</p>
+                            ) : (
+                                (view === 'products' ? products : plans).map((item: any) => (
+                                    <div key={item.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                        <div className="flex items-center gap-4">
+                                            {view === 'products' && <img src={item.image} className="w-10 h-10 object-contain rounded-md bg-white border" />}
+                                            <div>
+                                                <div className="font-bold text-slate-900">{item.name || `${item.network} ${item.data}`}</div>
+                                                <div className="text-xs text-slate-500">{formatCurrency(item.price)}</div>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => { setEditMode(true); view === 'products' ? setProductForm(item) : setPlanForm(item); }} className="p-2 bg-white border rounded-lg hover:bg-slate-100"><Edit2 className="w-4 h-4 text-slate-600" /></button>
+                                            <button onClick={() => view === 'products' ? deleteProduct(item.id) : deletePlan(item.id)} className="p-2 bg-white border rounded-lg hover:bg-red-50"><Trash2 className="w-4 h-4 text-red-600" /></button>
                                         </div>
                                     </div>
-                                    <div className="flex gap-2">
-                                        <button onClick={() => { setEditMode(true); view === 'products' ? setProductForm(item) : setPlanForm(item); }} className="p-2 bg-white border rounded-lg hover:bg-slate-100"><Edit2 className="w-4 h-4 text-slate-600" /></button>
-                                        <button onClick={() => view === 'products' ? deleteProduct(item.id) : deletePlan(item.id)} className="p-2 bg-white border rounded-lg hover:bg-red-50"><Trash2 className="w-4 h-4 text-red-600" /></button>
-                                    </div>
-                                </div>
-                            ))}
+                                ))
+                            )}
                          </div>
                      </div>
 
