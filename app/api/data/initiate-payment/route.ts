@@ -28,7 +28,7 @@ export async function POST(req: Request) {
       email: "saukidatalinks@gmail.com",
       phone_number: phone,
       currency: "NGN",
-      narration: `Data: ${plan.network} ${plan.data}`,
+      narration: ` Sauki Mart FLW `,
       is_permanent: false
     };
 
