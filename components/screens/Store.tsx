@@ -12,7 +12,6 @@ import { SharedReceipt } from '../SharedReceipt';
 import { toast } from '../../lib/toast';
 
 export const Store: React.FC = () => {
-  // Removed global caching variable to force refresh
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [step, setStep] = useState<'details' | 'form' | 'payment' | 'success'>('details');
@@ -38,7 +37,6 @@ export const Store: React.FC = () => {
       }
   };
 
-  // Auto-Polling Effect
   useEffect(() => {
     let interval: any;
     if (paymentDetails && step === 'payment') {
@@ -55,7 +53,7 @@ export const Store: React.FC = () => {
         } catch (e) {
           // Silent fail on polling error
         }
-      }, 3000); // Check every 3 seconds
+      }, 3000); 
     }
     return () => clearInterval(interval);
   }, [paymentDetails, step]);
@@ -74,9 +72,11 @@ export const Store: React.FC = () => {
       });
       setPaymentDetails(res);
       setStep('payment');
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      toast.error("Error creating order");
+      // Display Real API Error
+      const errorMsg = e.message || "Error creating order";
+      toast.error(errorMsg);
     } finally {
       setIsLoading(false);
     }

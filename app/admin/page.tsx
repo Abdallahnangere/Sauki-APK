@@ -76,7 +76,11 @@ export default function AdminPage() {
   const checkAuth = async () => {
       setLoading(true);
       try {
-          const res = await fetch('/api/admin/auth', { method: 'POST', body: JSON.stringify({ password }) });
+          const res = await fetch('/api/admin/auth', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password }) 
+          });
           if (res.ok) setIsAuthenticated(true);
           else alert("Incorrect Password");
       } catch (e) { alert("Error"); } 
@@ -95,7 +99,11 @@ export default function AdminPage() {
   // CRUD
   const saveProduct = async () => {
       setLoading(true);
-      await fetch('/api/products', { method: editMode ? 'PUT' : 'POST', body: JSON.stringify(productForm) });
+      await fetch('/api/products', { 
+        method: editMode ? 'PUT' : 'POST', 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(productForm) 
+      });
       setEditMode(false);
       setProductForm({ name: '', description: '', price: 0, image: '' });
       fetchData();
@@ -110,7 +118,11 @@ export default function AdminPage() {
 
   const savePlan = async () => {
       setLoading(true);
-      await fetch('/api/data-plans', { method: editMode ? 'PUT' : 'POST', body: JSON.stringify(planForm) });
+      await fetch('/api/data-plans', { 
+        method: editMode ? 'PUT' : 'POST', 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(planForm) 
+      });
       setEditMode(false);
       setPlanForm({ network: 'MTN', data: '', validity: '30 Days', price: 0, planId: 0 });
       fetchData();
@@ -126,7 +138,11 @@ export default function AdminPage() {
   const handleManualTopup = async () => {
       if (!manualForm.phone || !manualForm.planId) return alert("Fill all fields");
       setLoading(true);
-      const res = await fetch('/api/admin/manual-topup', { method: 'POST', body: JSON.stringify({ ...manualForm, password }) });
+      const res = await fetch('/api/admin/manual-topup', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...manualForm, password }) 
+      });
       const data = await res.json();
       setLoading(false);
       if (res.ok) {
@@ -140,7 +156,11 @@ export default function AdminPage() {
 
   const handleBroadcast = async () => {
       setLoading(true);
-      const res = await fetch('/api/system/message', { method: 'POST', body: JSON.stringify({ ...broadcastForm, password }) });
+      const res = await fetch('/api/system/message', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...broadcastForm, password }) 
+      });
       setLoading(false);
       if (res.ok) {
           alert("Broadcast Updated!");
@@ -159,6 +179,7 @@ export default function AdminPage() {
       setLoading(true);
       const res = await fetch('/api/admin/transactions/clear', { 
           method: 'POST', 
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ password: pass }) 
       });
       
@@ -218,6 +239,7 @@ export default function AdminPage() {
       try {
           const res = await fetch('/api/admin/console', {
               method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ endpoint: consoleEndpoint, payload: parsedPayload, password })
           });
           const data = await res.json();
@@ -246,6 +268,7 @@ export default function AdminPage() {
       try {
           const res = await fetch('/api/admin/console/flutterwave', {
               method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ endpoint: flwEndpoint, method: flwMethod, payload: parsedPayload, password })
           });
           const data = await res.json();

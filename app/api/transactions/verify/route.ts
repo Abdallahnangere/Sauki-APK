@@ -10,12 +10,11 @@ export async function POST(req: Request) {
     const transaction = await prisma.transaction.findUnique({ where: { tx_ref } });
     if (!transaction) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
 
-    // Optimization: If already delivered, skip everything
     if (transaction.status === 'delivered') return NextResponse.json({ status: 'delivered' });
     
     let currentStatus = transaction.status;
 
-    // 1. Verify with Flutterwave if still pending
+    // 1. Verify with Flutterwave
     if (currentStatus === 'pending') {
         try {
             const flwVerify = await axios.get(`https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref=${tx_ref}`, {
@@ -25,18 +24,24 @@ export async function POST(req: Request) {
             const flwData = flwVerify.data.data;
 
             if (flwVerify.data.status === 'success' && (flwData.status === 'successful' || flwData.status === 'completed')) {
-                await prisma.transaction.update({
-                    where: { id: transaction.id },
-                    data: { status: 'paid', paymentData: JSON.stringify(flwData) }
-                });
-                currentStatus = 'paid';
+                // Check amount matches expected
+                if (flwData.amount >= transaction.amount) {
+                    await prisma.transaction.update({
+                        where: { id: transaction.id },
+                        data: { 
+                            status: 'paid', 
+                            paymentData: flwData // Object, not string
+                        }
+                    });
+                    currentStatus = 'paid';
+                }
             }
         } catch (error) {
             console.error('FLW Verify Error', error);
         }
     }
 
-    // 2. AUTO-DELIVERY LOGIC (Retry)
+    // 2. AUTO-DELIVERY LOGIC
     if (currentStatus === 'paid' && transaction.type === 'data') {
         
         const plan = await prisma.dataPlan.findUnique({ where: { id: transaction.planId! } });
@@ -44,7 +49,6 @@ export async function POST(req: Request) {
         if (plan) {
             const networkId = AMIGO_NETWORKS[plan.network];
             
-            // STRICT PAYLOAD REQUESTED BY USER
             const amigoPayload = {
                 network: networkId,
                 mobile_number: transaction.phone,
@@ -66,7 +70,7 @@ export async function POST(req: Request) {
                     where: { id: transaction.id },
                     data: {
                         status: 'delivered',
-                        deliveryData: JSON.stringify(amigoRes.data)
+                        deliveryData: amigoRes.data // Object, not string
                     }
                 });
                 currentStatus = 'delivered';

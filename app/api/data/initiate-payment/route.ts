@@ -20,24 +20,21 @@ export async function POST(req: Request) {
     const tx_ref = `SAUKI-DATA-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const amount = plan.price;
 
-    console.log(`[Data Init] Creating Virtual Account for ${phone}`);
+    console.log(`[Data Init] Charges Flow for ${phone}`);
 
-    // EXACT Payload requested by user
+    // Charges Endpoint Payload
     const flwPayload = {
-      email: "saukidatalinks@gmail.com",
-      amount: amount.toString(),
       tx_ref: tx_ref,
-      firstname: "Sauki",
-      lastname: "Mart",
-      narration: `Data Purchase ${plan.network} ${plan.data}`,
-      phonenumber: phone,
+      amount: amount.toString(),
+      email: "saukidatalinks@gmail.com",
+      phone_number: phone,
       currency: "NGN",
-      is_permanent: false
+      narration: `Data: ${plan.network} ${plan.data}`,
     };
 
     try {
         const flwResponse = await axios.post(
-          'https://api.flutterwave.com/v3/virtual-account-numbers',
+          'https://api.flutterwave.com/v3/charges?type=bank_transfer',
           flwPayload,
           {
             headers: { 
@@ -49,11 +46,12 @@ export async function POST(req: Request) {
 
         if (flwResponse.data.status !== 'success') {
           console.error('[Flutterwave Error]', flwResponse.data);
-          throw new Error('Flutterwave API returned error');
+          throw new Error(flwResponse.data.message || 'Flutterwave Init Failed');
         }
 
-        const data = flwResponse.data.data;
+        const data = flwResponse.data.data; // This contains the bank details
 
+        // Save to DB - NOTE: paymentData is passed as an Object, NOT stringified
         await prisma.transaction.create({
           data: {
             tx_ref,
@@ -63,29 +61,34 @@ export async function POST(req: Request) {
             amount,
             planId,
             idempotencyKey: uuidv4(),
-            paymentData: JSON.stringify(data),
+            paymentData: data, 
           }
         });
 
         // Map response for frontend
+        // The structure of charges response for bank transfer usually contains meta.authorization with transfer details
+        const bankInfo = data.meta?.authorization || {};
+
         return NextResponse.json({
           tx_ref,
-          bank: data.bank_name,
-          account_number: data.account_number,
-          account_name: 'SAUKI MART FLW', // As requested
-          amount
+          bank: bankInfo.transfer_bank || 'Processing...',
+          account_number: bankInfo.transfer_account || 'Processing...',
+          account_name: 'SAUKI MART FLW', 
+          amount,
+          note: bankInfo.transfer_note
         });
 
     } catch (flwError: any) {
-        console.error('[Flutterwave API Exception]', flwError.response?.data || flwError.message);
+        const msg = flwError.response?.data?.message || flwError.message;
+        console.error('[Flutterwave API Exception]', msg);
         return NextResponse.json({ 
             error: 'Payment Gateway Error', 
-            details: flwError.response?.data?.message || flwError.message 
+            details: msg 
         }, { status: 502 });
     }
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Data Payment Init Error:', error);
-    return NextResponse.json({ error: 'Payment initiation failed' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Payment initiation failed' }, { status: 500 });
   }
 }

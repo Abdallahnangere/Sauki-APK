@@ -18,11 +18,10 @@ export async function POST(req: Request) {
         const networkId = AMIGO_NETWORKS[plan.network];
         const idempotencyKey = `MANUAL-${uuidv4()}`;
         
-        // STRICT PAYLOAD REQUESTED BY USER
         const amigoPayload = {
             network: networkId,
             mobile_number: phone,
-            plan: Number(plan.planId), // Using Numeric Plan ID from DB
+            plan: Number(plan.planId),
             Ported_number: true
         };
 
@@ -37,6 +36,7 @@ export async function POST(req: Request) {
             amigoRes.data.status === 'successful'
         );
         
+        // FIX: Pass deliveryData and paymentData as Objects, NOT strings.
         const transaction = await prisma.transaction.create({
             data: {
                 tx_ref: idempotencyKey,
@@ -45,8 +45,8 @@ export async function POST(req: Request) {
                 phone,
                 amount: 0, 
                 planId: plan.id,
-                deliveryData: JSON.stringify(amigoRes.data),
-                paymentData: JSON.stringify({ method: 'Manual Admin Topup' })
+                deliveryData: amigoRes.data, // Object
+                paymentData: { method: 'Manual Admin Topup' } // Object
             }
         });
 

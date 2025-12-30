@@ -12,7 +12,6 @@ import { SharedReceipt } from '../SharedReceipt';
 import { toast } from '../../lib/toast';
 
 export const Data: React.FC = () => {
-  // Removed global cache to ensure updates
   const [plans, setPlans] = useState<DataPlan[]>([]);
   const [selectedNetwork, setSelectedNetwork] = useState<NetworkType | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<DataPlan | null>(null);
@@ -36,7 +35,6 @@ export const Data: React.FC = () => {
       }
   };
 
-  // Auto-Polling
   useEffect(() => {
     let interval: any;
     if (paymentDetails && step === 'payment') {
@@ -50,7 +48,7 @@ export const Data: React.FC = () => {
             clearInterval(interval);
             toast.success("Payment received! Data sent.");
           } else if (res.status === 'paid') {
-            // Paid but waiting for delivery (Amigo processing)
+             // wait for delivery
           }
         } catch (e) { }
       }, 3000); 
@@ -79,8 +77,11 @@ export const Data: React.FC = () => {
         const res = await api.initiateDataPayment({ planId: selectedPlan.id, phone });
         setPaymentDetails(res);
         setStep('payment');
-    } catch(e) {
-        toast.error("Connection error. Try again.");
+    } catch(e: any) {
+        // Display Real Error from API
+        const errorMsg = e.message || "Connection error. Try again.";
+        toast.error(errorMsg);
+        console.error(e);
     } finally {
         setIsLoading(false);
     }
