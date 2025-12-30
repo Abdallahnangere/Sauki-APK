@@ -7,7 +7,7 @@ export async function POST(req: Request) {
   const secret = process.env.FLUTTERWAVE_WEBHOOK_SECRET;
   const signature = req.headers.get('verif-hash');
 
-  if (!signature || (secret && signature !== secret)) {
+  if (secret && signature !== secret) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
   }
 

@@ -9,8 +9,12 @@ const API_KEY = process.env.AMIGO_API_KEY || '';
 // Configure Proxy Agent
 let httpsAgent: any = undefined;
 if (PROXY_URL) {
-    // This tunnels the connection through your AWS Squid Proxy
-    httpsAgent = new HttpsProxyAgent(PROXY_URL);
+    try {
+        // This tunnels the connection through your AWS Squid Proxy
+        httpsAgent = new HttpsProxyAgent(PROXY_URL);
+    } catch (e) {
+        console.error("Failed to initialize Proxy Agent", e);
+    }
 }
 
 // Create Axios Instance with cleaner config
