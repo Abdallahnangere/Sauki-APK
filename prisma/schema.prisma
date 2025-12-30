@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql" // Change to postgresql if using Vercel Postgres
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -52,8 +52,10 @@ model Transaction {
   
   // Technical
   idempotencyKey String?  @unique
-  paymentData    String?  // JSON string (Stores full Flutterwave response)
-  deliveryData   String?  // JSON string (Stores full Amigo response)
+  
+  // --- UPDATED FIELDS ---
+  paymentData    Json?    // Now uses native JSON type
+  deliveryData   Json?    // Now uses native JSON type
   
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
