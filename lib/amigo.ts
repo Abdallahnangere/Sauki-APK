@@ -34,16 +34,23 @@ export const amigoClient = axios.create({
 /**
  * Helper to call Amigo endpoints.
  * Routes traffic through the configured AWS Proxy.
+ * * UPDATED SIGNATURE:
+ * 1. payload (Object) - The data to send
+ * 2. idempotencyKey (String, Optional) - Unique key for the transaction
+ * 3. endpoint (String, Optional) - Specific path (e.g., '/data'), defaults to empty
  */
-export async function callAmigoAPI(endpoint: string, payload: any, idempotencyKey?: string) {
+export async function callAmigoAPI(payload: any, idempotencyKey?: string, endpoint: string = '') {
   // 1. Sanitize Base URL (Remove trailing slash)
   const baseUrl = AMIGO_BASE.replace(/\/$/, '');
   
-  // 2. Sanitize Endpoint (Ensure leading slash)
-  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  // 2. Prepare Path (only add slash if endpoint exists)
+  let path = '';
+  if (endpoint) {
+    path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  }
   
   // 3. Construct Full URL
-  const fullUrl = `${baseUrl}${cleanEndpoint}`;
+  const fullUrl = `${baseUrl}${path}`;
 
   console.log(`[Amigo Tunnel] 🚀 Requesting: ${fullUrl} via ${PROXY_URL ? 'Proxy' : 'Direct'}`);
 
