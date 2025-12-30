@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { name, description, price, image } = body;
     
-    if (!name || !price) return NextResponse.json({ error: 'Required' }, { status: 400 });
+    if (!name || !price) return NextResponse.json({ error: 'Name and Price are required' }, { status: 400 });
 
     const product = await prisma.product.create({
       data: {
@@ -33,7 +33,8 @@ export async function POST(req: Request) {
     });
     return NextResponse.json(product);
   } catch (error) {
-    return NextResponse.json({ error: 'Error' }, { status: 500 });
+    console.error("Create Product Error:", error);
+    return NextResponse.json({ error: 'Failed to create product' }, { status: 500 });
   }
 }
 
@@ -41,15 +42,21 @@ export async function PUT(req: Request) {
     try {
         const body = await req.json();
         const { id, ...data } = body;
+
+        if (!id) return NextResponse.json({ error: 'Product ID required' }, { status: 400 });
+
         const product = await prisma.product.update({
-            where: { id },
+            where: { id: String(id) },
             data: {
-                ...data,
-                price: Number(data.price)
+                name: data.name,
+                description: data.description,
+                price: Number(data.price),
+                image: data.image
             }
         });
         return NextResponse.json(product);
     } catch (e) {
+        console.error("Update Product Error:", e);
         return NextResponse.json({ error: 'Update failed' }, { status: 500 });
     }
 }
@@ -63,6 +70,7 @@ export async function DELETE(req: Request) {
         await prisma.product.delete({ where: { id } });
         return NextResponse.json({ success: true });
     } catch (e) {
+        console.error("Delete Product Error:", e);
         return NextResponse.json({ error: 'Delete failed' }, { status: 500 });
     }
 }

@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     const { planId, phone } = body;
 
     if (!process.env.FLUTTERWAVE_SECRET_KEY) {
-      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+      return NextResponse.json({ error: 'Server configuration error: Missing API Key' }, { status: 500 });
     }
 
     const plan = await prisma.dataPlan.findUnique({ where: { id: planId } });
@@ -22,7 +22,6 @@ export async function POST(req: Request) {
 
     console.log(`[Data Init] Charges Flow for ${phone}`);
 
-    // Charges Endpoint Payload
     const flwPayload = {
       tx_ref: tx_ref,
       amount: amount.toString(),
@@ -30,6 +29,7 @@ export async function POST(req: Request) {
       phone_number: phone,
       currency: "NGN",
       narration: `Data: ${plan.network} ${plan.data}`,
+      is_permanent: false
     };
 
     try {
@@ -44,14 +44,29 @@ export async function POST(req: Request) {
           }
         );
 
-        if (flwResponse.data.status !== 'success') {
-          console.error('[Flutterwave Error]', flwResponse.data);
-          throw new Error(flwResponse.data.message || 'Flutterwave Init Failed');
+        const responseBody = flwResponse.data;
+
+        if (responseBody.status !== 'success') {
+          console.error('[Flutterwave Error]', responseBody);
+          throw new Error(responseBody.message || 'Payment initialization failed');
         }
 
-        const data = flwResponse.data.data; // This contains the bank details
+        const data = responseBody.data;
 
-        // Save to DB - NOTE: paymentData is passed as an Object, NOT stringified
+        // STRICT CHECK: Ensure data and meta exist
+        if (!data) {
+             console.error('[Flutterwave Error] Response missing data object:', responseBody);
+             throw new Error('Payment gateway returned empty data.');
+        }
+
+        const bankInfo = data.meta?.authorization;
+
+        if (!bankInfo || !bankInfo.transfer_bank || !bankInfo.transfer_account) {
+            console.error('[Flutterwave Error] Missing bank details in meta:', JSON.stringify(data, null, 2));
+            throw new Error('Payment gateway did not return bank account details. Please try again or contact support.');
+        }
+
+        // Save to DB (Store paymentData as object, not string)
         await prisma.transaction.create({
           data: {
             tx_ref,
@@ -65,14 +80,10 @@ export async function POST(req: Request) {
           }
         });
 
-        // Map response for frontend
-        // The structure of charges response for bank transfer usually contains meta.authorization with transfer details
-        const bankInfo = data.meta?.authorization || {};
-
         return NextResponse.json({
           tx_ref,
-          bank: bankInfo.transfer_bank || 'Processing...',
-          account_number: bankInfo.transfer_account || 'Processing...',
+          bank: bankInfo.transfer_bank,
+          account_number: bankInfo.transfer_account,
           account_name: 'SAUKI MART FLW', 
           amount,
           note: bankInfo.transfer_note

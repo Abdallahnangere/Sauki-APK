@@ -22,7 +22,6 @@ export async function POST(req: Request) {
 
     console.log(`[Ecomm Init] Charges Flow for ${name}`);
 
-    // Charges Endpoint Payload
     const flwPayload = {
       tx_ref: tx_ref,
       amount: amount.toString(),
@@ -33,7 +32,8 @@ export async function POST(req: Request) {
       narration: `Product: ${product.name}`,
       meta: {
         consumer_state: state
-      }
+      },
+      is_permanent: false
     };
 
     try {
@@ -48,15 +48,28 @@ export async function POST(req: Request) {
           }
         );
 
-        if (flwResponse.data.status !== 'success') {
-          console.error('[Flutterwave Error]', flwResponse.data);
-          throw new Error(flwResponse.data.message || 'Flutterwave Init Failed');
+        const responseBody = flwResponse.data;
+
+        if (responseBody.status !== 'success') {
+          console.error('[Flutterwave Error]', responseBody);
+          throw new Error(responseBody.message || 'Payment initialization failed');
         }
 
-        const data = flwResponse.data.data;
-        const bankInfo = data.meta?.authorization || {};
+        const data = responseBody.data;
 
-        // Save to DB - NOTE: paymentData is passed as an Object
+        // STRICT CHECK
+        if (!data) {
+             console.error('[Flutterwave Error] Response missing data object:', responseBody);
+             throw new Error('Payment gateway returned empty data.');
+        }
+
+        const bankInfo = data.meta?.authorization;
+
+        if (!bankInfo || !bankInfo.transfer_bank || !bankInfo.transfer_account) {
+            console.error('[Flutterwave Error] Missing bank details in meta:', JSON.stringify(data, null, 2));
+            throw new Error('Payment gateway did not return bank account details.');
+        }
+
         await prisma.transaction.create({
           data: {
             tx_ref,
@@ -74,8 +87,8 @@ export async function POST(req: Request) {
 
         return NextResponse.json({
           tx_ref,
-          bank: bankInfo.transfer_bank || 'Processing...',
-          account_number: bankInfo.transfer_account || 'Processing...',
+          bank: bankInfo.transfer_bank,
+          account_number: bankInfo.transfer_account,
           account_name: 'SAUKI MART FLW', 
           amount,
           note: bankInfo.transfer_note
