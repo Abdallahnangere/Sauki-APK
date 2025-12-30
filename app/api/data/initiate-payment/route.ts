@@ -8,21 +8,30 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { planId, phone } = body;
 
+    // 1. Basic Validation
+    if (!planId || !phone) {
+        return NextResponse.json({ error: 'Missing planId or phone number' }, { status: 400 });
+    }
+
     if (!process.env.FLUTTERWAVE_SECRET_KEY) {
       console.error("FLUTTERWAVE_SECRET_KEY is missing");
       return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
     }
 
+    // 2. Fetch Plan Details
     const plan = await prisma.dataPlan.findUnique({ where: { id: planId } });
     if (!plan) return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
 
+    // 3. Prepare Payload
     const tx_ref = `SAUKI-DATA-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const amount = plan.price;
-    const email = 'customer@saukimart.com';
+    // Ideally use the real user's email if available, otherwise this placeholder is fine for Bank Transfers
+    const email = 'customer@saukimart.com'; 
 
     console.log(`[Payment Init] Starting for ${phone} - ${amount} NGN`);
 
     try {
+        // 4. Call Flutterwave API
         const flwResponse = await axios.post(
           'https://api.flutterwave.com/v3/charges?type=bank_transfer',
           {
@@ -31,6 +40,7 @@ export async function POST(req: Request) {
             email,
             phone_number: phone,
             currency: 'NGN',
+            // is_permanent: false, // Optional: Ensures account expires after transaction
             meta: {
               plan_id: planId,
               type: 'data',
@@ -45,13 +55,19 @@ export async function POST(req: Request) {
           }
         );
 
+        // 5. Check Flutterwave Status
         if (flwResponse.data.status !== 'success') {
           console.error('[Flutterwave Error]', flwResponse.data);
           throw new Error('Flutterwave returned non-success status');
         }
 
-        const paymentMeta = flwResponse.data.meta.authorization;
+        // --- CRITICAL FIX HERE ---
+        // Flutterwave structure is { status: 'success', data: { meta: { authorization: ... } } }
+        // axios response.data is the root object. So we need .data.data.meta
+        const flwData = flwResponse.data.data;
+        const paymentMeta = flwData.meta.authorization;
 
+        // 6. Save Pending Transaction to Database
         await prisma.transaction.create({
           data: {
             tx_ref,
@@ -61,23 +77,27 @@ export async function POST(req: Request) {
             amount,
             planId,
             idempotencyKey: uuidv4(),
-            paymentData: JSON.stringify(flwResponse.data),
+            paymentData: JSON.stringify(flwResponse.data), // Save full log for debugging
           }
         });
 
+        // 7. Return Transfer Details to Client
         return NextResponse.json({
+          status: 'success',
           tx_ref,
           bank: paymentMeta.transfer_bank,
           account_number: paymentMeta.transfer_account,
-          account_name: 'SAUKI MART',
-          amount
+          account_name: 'SAUKI MART', // Or paymentMeta.transfer_bank if provided
+          amount: paymentMeta.transfer_amount || amount,
+          expiry_note: paymentMeta.transfer_note || 'Expires soon'
         });
 
     } catch (flwError: any) {
+        // Safe error logging
         console.error('[Flutterwave API Exception]', flwError.response?.data || flwError.message);
         return NextResponse.json({ 
             error: 'Payment Gateway Error', 
-            details: flwError.response?.data?.message || flwError.message 
+            details: flwError.response?.data?.message || 'Could not initiate bank transfer'
         }, { status: 502 });
     }
 
