@@ -3,6 +3,8 @@ import { prisma } from '../../../../lib/prisma';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -18,23 +20,25 @@ export async function POST(req: Request) {
     const tx_ref = `SAUKI-COMM-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const amount = product.price;
 
+    console.log(`[Ecomm Init] Creating Virtual Account for ${name}`);
+
+    // EXACT Payload requested by user
+    const flwPayload = {
+      email: "saukidatalinks@gmail.com",
+      amount: amount.toString(),
+      tx_ref: tx_ref,
+      firstname: "Sauki",
+      lastname: "Mart",
+      narration: `Product Purchase: ${product.name}`,
+      phonenumber: phone,
+      currency: "NGN",
+      is_permanent: false
+    };
+
     try {
         const flwResponse = await axios.post(
-          'https://api.flutterwave.com/v3/charges?type=bank_transfer',
-          {
-            tx_ref,
-            amount,
-            email: 'customer@saukimart.com',
-            phone_number: phone,
-            currency: 'NGN',
-            fullname: name,
-            meta: {
-              product_id: productId,
-              state,
-              type: 'ecommerce',
-              consumer_name: name
-            }
-          },
+          'https://api.flutterwave.com/v3/virtual-account-numbers',
+          flwPayload,
           {
             headers: { 
                 Authorization: `Bearer ${process.env.FLUTTERWAVE_SECRET_KEY}`,
@@ -45,10 +49,10 @@ export async function POST(req: Request) {
 
         if (flwResponse.data.status !== 'success') {
           console.error('[Flutterwave Error]', flwResponse.data);
-          throw new Error('Flutterwave returned non-success status');
+          throw new Error('Flutterwave API returned error');
         }
 
-        const paymentMeta = flwResponse.data.meta.authorization;
+        const data = flwResponse.data.data;
 
         await prisma.transaction.create({
           data: {
@@ -61,15 +65,15 @@ export async function POST(req: Request) {
             customerName: name,
             deliveryState: state,
             idempotencyKey: uuidv4(),
-            paymentData: JSON.stringify(flwResponse.data),
+            paymentData: JSON.stringify(data),
           }
         });
 
         return NextResponse.json({
           tx_ref,
-          bank: paymentMeta.transfer_bank,
-          account_number: paymentMeta.transfer_account,
-          account_name: 'SAUKI MART',
+          bank: data.bank_name,
+          account_number: data.account_number,
+          account_name: 'SAUKI MART FLW', // As requested
           amount
         });
 

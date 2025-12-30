@@ -18,17 +18,16 @@ export async function POST(req: Request) {
         const networkId = AMIGO_NETWORKS[plan.network];
         const idempotencyKey = `MANUAL-${uuidv4()}`;
         
-        // Exact payload structure matching the working Console
+        // STRICT PAYLOAD REQUESTED BY USER
         const amigoPayload = {
             network: networkId,
             mobile_number: phone,
-            plan: Number(plan.planId),
+            plan: Number(plan.planId), // Using Numeric Plan ID from DB
             Ported_number: true
         };
 
         console.log(`[Manual Topup] Sending to Amigo:`, amigoPayload);
 
-        // Use same endpoint as console
         const amigoRes = await callAmigoAPI('/data/', amigoPayload, idempotencyKey);
 
         const isSuccess = amigoRes.success && (
@@ -44,7 +43,7 @@ export async function POST(req: Request) {
                 type: 'data',
                 status: isSuccess ? 'delivered' : 'failed',
                 phone,
-                amount: 0, // Admin override
+                amount: 0, 
                 planId: plan.id,
                 deliveryData: JSON.stringify(amigoRes.data),
                 paymentData: JSON.stringify({ method: 'Manual Admin Topup' })

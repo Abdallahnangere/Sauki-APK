@@ -11,10 +11,9 @@ import { toPng } from 'html-to-image';
 import { SharedReceipt } from '../SharedReceipt';
 import { toast } from '../../lib/toast';
 
-let cachedPlans: DataPlan[] | null = null;
-
 export const Data: React.FC = () => {
-  const [plans, setPlans] = useState<DataPlan[]>(cachedPlans || []);
+  // Removed global cache to ensure updates
+  const [plans, setPlans] = useState<DataPlan[]>([]);
   const [selectedNetwork, setSelectedNetwork] = useState<NetworkType | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<DataPlan | null>(null);
   const [phone, setPhone] = useState('');
@@ -25,13 +24,17 @@ export const Data: React.FC = () => {
   const receiptRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!cachedPlans) {
-        api.getDataPlans().then(data => {
-            setPlans(data);
-            cachedPlans = data;
-        });
-    }
+    loadPlans();
   }, []);
+
+  const loadPlans = async () => {
+      try {
+          const data = await api.getDataPlans();
+          setPlans(data);
+      } catch (e) {
+          console.error("Failed to load plans");
+      }
+  };
 
   // Auto-Polling
   useEffect(() => {
@@ -239,7 +242,7 @@ export const Data: React.FC = () => {
                      </div>
                      <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
                          <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1">Account Name</p>
-                         <p className="font-bold text-slate-900 text-sm">Abdullahi Adam Usman FLW</p>
+                         <p className="font-bold text-slate-900 text-sm">{paymentDetails.account_name}</p>
                      </div>
                  </div>
 

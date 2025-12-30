@@ -37,7 +37,6 @@ export async function POST(req: Request) {
     }
 
     // 2. AUTO-DELIVERY LOGIC (Retry)
-    // If status is PAID (either just now or previously), but not delivered, retry delivery.
     if (currentStatus === 'paid' && transaction.type === 'data') {
         
         const plan = await prisma.dataPlan.findUnique({ where: { id: transaction.planId! } });
@@ -45,7 +44,7 @@ export async function POST(req: Request) {
         if (plan) {
             const networkId = AMIGO_NETWORKS[plan.network];
             
-            // Match Console Payload
+            // STRICT PAYLOAD REQUESTED BY USER
             const amigoPayload = {
                 network: networkId,
                 mobile_number: transaction.phone,

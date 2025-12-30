@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Product, PaymentInitResponse } from '../../types';
 import { api } from '../../lib/api';
-import { formatCurrency, cn } from '../../lib/utils';
+import { formatCurrency } from '../../lib/utils';
 import { BottomSheet } from '../ui/BottomSheet';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -11,11 +11,9 @@ import { toPng } from 'html-to-image';
 import { SharedReceipt } from '../SharedReceipt';
 import { toast } from '../../lib/toast';
 
-// Module-level cache for instant tab switching
-let cachedProducts: Product[] | null = null;
-
 export const Store: React.FC = () => {
-  const [products, setProducts] = useState<Product[]>(cachedProducts || []);
+  // Removed global caching variable to force refresh
+  const [products, setProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [step, setStep] = useState<'details' | 'form' | 'payment' | 'success'>('details');
   const [formData, setFormData] = useState({ name: '', phone: '', state: '' });
@@ -25,16 +23,20 @@ export const Store: React.FC = () => {
   const receiptRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Optimistic load
-    if (!cachedProducts) {
-      setIsLoading(true);
-      api.getProducts().then(data => {
-        setProducts(data);
-        cachedProducts = data;
-        setIsLoading(false);
-      });
-    }
+      loadProducts();
   }, []);
+
+  const loadProducts = async () => {
+      setIsLoading(true);
+      try {
+        const data = await api.getProducts();
+        setProducts(data);
+      } catch (e) {
+          console.error("Failed to load products");
+      } finally {
+          setIsLoading(false);
+      }
+  };
 
   // Auto-Polling Effect
   useEffect(() => {
@@ -209,7 +211,7 @@ export const Store: React.FC = () => {
                      </div>
                      <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
                          <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1">Account Name</p>
-                         <p className="font-bold text-slate-900 text-sm">Abdullahi Adam Usman FLW</p>
+                         <p className="font-bold text-slate-900 text-sm">{paymentDetails.account_name}</p>
                      </div>
                  </div>
 

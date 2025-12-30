@@ -14,7 +14,8 @@ export async function POST(req: Request) {
     const body = await req.json();
     const payload = body.data || body; 
     const { status, amount } = payload; 
-    // FLW webhook payload often has tx_ref in 'txRef' or 'tx_ref' depending on version
+    
+    // Virtual Accounts webhook usually puts the tx_ref in `txRef` or `reference` or `paymentEntity.reference`
     const reference = payload.txRef || payload.tx_ref || payload.reference; 
 
     console.log(`[Webhook] 🔔 Received event for ${reference}. Status: ${status}`);
@@ -33,13 +34,12 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'Tx not found' }, { status: 404 });
     }
 
-    // 3. Prevent Double Processing if already delivered
+    // 3. Prevent Double Processing
     if (transaction.status === 'delivered') {
-        console.log(`[Webhook] ✅ Already delivered: ${reference}`);
         return NextResponse.json({ received: true });
     }
 
-    // 4. Mark as Paid (if not already)
+    // 4. Mark as Paid
     if (transaction.status !== 'paid') {
         await prisma.transaction.update({
             where: { id: transaction.id },
@@ -58,7 +58,7 @@ export async function POST(req: Request) {
          if (plan) {
              const networkId = AMIGO_NETWORKS[plan.network];
              
-             // Construct payload exactly like the working console
+             // STRICT PAYLOAD REQUESTED BY USER
              const amigoPayload = {
                  network: networkId,
                  mobile_number: transaction.phone,
@@ -69,7 +69,6 @@ export async function POST(req: Request) {
              console.log(`[Webhook] 🚀 Triggering Amigo for ${reference}`, amigoPayload);
              const amigoRes = await callAmigoAPI('/data/', amigoPayload, reference);
              
-             // Check strict success conditions
              const isSuccess = amigoRes.success && (
                 amigoRes.data.success === true || 
                 amigoRes.data.Status === 'successful' ||
@@ -88,10 +87,7 @@ export async function POST(req: Request) {
                  console.log(`[Webhook] ✨ DELIVERED ${reference}`);
              } else {
                  console.error(`[Webhook] ❌ Delivery Failed ${reference}`, amigoRes.data);
-                 // We leave status as 'paid' so Admin can see it needs manual attention
              }
-         } else {
-             console.error(`[Webhook] Plan not found for ID: ${transaction.planId}`);
          }
     }
 
