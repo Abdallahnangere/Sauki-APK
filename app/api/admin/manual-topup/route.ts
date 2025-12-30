@@ -27,7 +27,7 @@ export async function POST(req: Request) {
 
         console.log(`[Manual Topup] Sending to Amigo:`, amigoPayload);
 
-        const amigoRes = await callAmigoAPI('/data/', amigoPayload, idempotencyKey);
+        const amigoRes = await callAmigoAPI(amigoPayload, idempotencyKey);
 
         const isSuccess = amigoRes.success && (
             amigoRes.data.success === true || 
