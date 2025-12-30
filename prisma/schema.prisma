@@ -1,1 +1,69 @@
-���Ȭʋ�
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // Change to postgresql if using Vercel Postgres
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id          String        @id @default(uuid())
+  name        String
+  description String
+  price       Float
+  image       String
+  inStock     Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  transactions Transaction[]
+}
+
+model DataPlan {
+  id          String        @id @default(uuid())
+  network     String        // MTN, AIRTEL, GLO
+  data        String        // 1GB
+  validity    String        // 30 Days
+  price       Float
+  planId      Int           // Amigo Plan ID
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  transactions Transaction[]
+}
+
+model Transaction {
+  id            String    @id @default(uuid())
+  tx_ref        String    @unique
+  type          String    // ecommerce, data
+  status        String    // pending, paid, delivered, failed
+  phone         String
+  amount        Float
+  
+  // Relations
+  planId        String?
+  dataPlan      DataPlan? @relation(fields: [planId], references: [id])
+  
+  productId     String?
+  product       Product?  @relation(fields: [productId], references: [id])
+  
+  // Meta
+  customerName  String?
+  deliveryState String?
+  
+  // Technical
+  idempotencyKey String?  @unique
+  paymentData    String?  // JSON string (Stores full Flutterwave response)
+  deliveryData   String?  // JSON string (Stores full Amigo response)
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model SystemMessage {
+  id        String   @id @default(uuid())
+  content   String
+  type      String   // info, warning, alert
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
