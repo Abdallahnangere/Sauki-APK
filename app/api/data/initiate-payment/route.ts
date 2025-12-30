@@ -46,27 +46,25 @@ export async function POST(req: Request) {
 
         const responseBody = flwResponse.data;
 
+        // 1. Check for success status
         if (responseBody.status !== 'success') {
           console.error('[Flutterwave Error]', responseBody);
           throw new Error(responseBody.message || 'Payment initialization failed');
         }
 
-        const data = responseBody.data;
+        // 2. SMART EXTRACTION: Check for 'meta' at ROOT first, then inside 'data'
+        // Bank transfers often return meta at the root: { status: 'success', meta: { authorization: ... } }
+        const metaObj = responseBody.meta || responseBody.data?.meta;
+        const bankInfo = metaObj?.authorization;
 
-        // STRICT CHECK: Ensure data and meta exist
-        if (!data) {
-             console.error('[Flutterwave Error] Response missing data object:', responseBody);
-             throw new Error('Payment gateway returned empty data.');
-        }
-
-        const bankInfo = data.meta?.authorization;
-
+        // 3. Validate Bank Info
         if (!bankInfo || !bankInfo.transfer_bank || !bankInfo.transfer_account) {
-            console.error('[Flutterwave Error] Missing bank details in meta:', JSON.stringify(data, null, 2));
-            throw new Error('Payment gateway did not return bank account details. Please try again or contact support.');
+            console.error('[Flutterwave Error] Missing bank details:', JSON.stringify(responseBody, null, 2));
+            throw new Error('Payment gateway did not return bank account details. Please try again.');
         }
 
-        // Save to DB (Store paymentData as object, not string)
+        // 4. Save to DB
+        // We save the entire 'responseBody' (or just the useful parts) to paymentData
         await prisma.transaction.create({
           data: {
             tx_ref,
@@ -76,10 +74,11 @@ export async function POST(req: Request) {
             amount,
             planId,
             idempotencyKey: uuidv4(),
-            paymentData: data, 
+            paymentData: responseBody, // Save the full response JSON
           }
         });
 
+        // 5. Return success response
         return NextResponse.json({
           tx_ref,
           bank: bankInfo.transfer_bank,
