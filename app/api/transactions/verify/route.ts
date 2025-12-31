@@ -56,7 +56,7 @@ export async function POST(req: Request) {
                 Ported_number: true
             };
 
-            const amigoRes = await callAmigoAPI('/data/', amigoPayload, tx_ref);
+            const amigoRes = await callAmigoAPI(amigoPayload, tx_ref);
 
             const isSuccess = amigoRes.success && (
                 amigoRes.data.success === true || 
