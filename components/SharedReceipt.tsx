@@ -17,12 +17,13 @@ interface ReceiptProps {
 
 export const SharedReceipt = forwardRef<HTMLDivElement, ReceiptProps>(({ transaction }, ref) => {
   return (
-    // FIX: Position fixed off-screen ensures it is rendered by the browser but not seen by the user.
-    // Opacity: 0 or Visibility: Hidden often prevents HTML-to-Image from capturing content.
-    <div style={{ position: 'fixed', top: 0, left: '-9999px' }}>
+    // FIX: Position fixed/absolute with z-index -50 ensures it is rendered by the browser (with dimensions)
+    // allowing html-to-image to capture it, but it stays behind the main content so users don't see it.
+    // Height: 0 or display: none often fails.
+    <div style={{ position: 'fixed', top: 0, left: 0, zIndex: -50, width: '450px', opacity: 0, pointerEvents: 'none' }}>
       <div 
         ref={ref} 
-        className="w-[450px] bg-white p-10 font-sans text-slate-900 relative overflow-hidden border border-slate-100"
+        className="w-[450px] bg-white p-10 font-sans text-slate-900 relative border border-slate-100"
         style={{ fontFamily: "'Inter', sans-serif" }}
       >
         {/* Decorative Top Border */}
