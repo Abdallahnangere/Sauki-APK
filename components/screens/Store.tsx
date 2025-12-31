@@ -6,31 +6,10 @@ import { formatCurrency, cn } from '../../lib/utils';
 import { BottomSheet } from '../ui/BottomSheet';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
-// FIX: Removed 'SimCard' from this import list
 import { Loader2, CheckCircle2, Copy, Download, RefreshCw, ShoppingBag, Plus, Smartphone } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { SharedReceipt } from '../SharedReceipt';
 import { toast } from '../../lib/toast';
-
-// FIX: Added custom SimCard component here
-const SimCard = ({ className = "w-6 h-6", ...props }: React.SVGProps<SVGSVGElement>) => (
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
-    strokeLinejoin="round" 
-    className={className}
-    {...props}
-  >
-    <path d="M6 2h10l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z" />
-    <path d="M10 10h4" />
-    <path d="M10 14h4" />
-    <path d="M12 10v8" />
-  </svg>
-);
 
 export const Store: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -170,14 +149,12 @@ export const Store: React.FC = () => {
             onClick={() => setActiveTab('device')}
             className={cn("flex-1 py-2 text-sm font-bold rounded-lg transition-all", activeTab === 'device' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500")}
           >
-            <Smartphone className="w-4 h-4 mr-2 inline-block" />
             Data Devices
           </button>
           <button 
             onClick={() => setActiveTab('sim')}
             className={cn("flex-1 py-2 text-sm font-bold rounded-lg transition-all", activeTab === 'sim' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500")}
           >
-            <SimCard className="w-4 h-4 mr-2 inline-block" />
             Data SIMs
           </button>
       </div>
