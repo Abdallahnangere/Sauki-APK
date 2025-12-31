@@ -41,11 +41,12 @@ export async function POST(req: Request) {
       phone_number: phone,
       currency: "NGN",
       fullname: name,
-      narration: `SAUKI Order: ${fullManifest}`,
+      narration: `SAUKI Mart`,
       meta: {
         customer_name: name,
         delivery_address: state,
-        items: items
+        // FIX: Flutterwave meta values MUST be strings. We cannot pass a raw array here.
+        items: JSON.stringify(items) 
       },
       is_permanent: false
     };
@@ -90,7 +91,7 @@ export async function POST(req: Request) {
             paymentData: responseBody,
             deliveryData: {
                 manifest: fullManifest,
-                items: items,
+                items: items, // We can keep the raw array in our own DB
                 address: state,
                 initiatedAt: new Date().toISOString()
             }
@@ -107,11 +108,13 @@ export async function POST(req: Request) {
         });
 
     } catch (flwError: any) {
+        console.error("Flutterwave Error:", flwError.response?.data || flwError.message);
         const msg = flwError.response?.data?.message || flwError.message;
         return NextResponse.json({ error: 'Gateway Error', details: msg }, { status: 502 });
     }
 
   } catch (error: any) {
+    console.error("Server Error:", error);
     return NextResponse.json({ error: error.message || 'Initiation failed' }, { status: 500 });
   }
-}
+    }
