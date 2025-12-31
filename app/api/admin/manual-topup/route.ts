@@ -28,7 +28,7 @@ export async function POST(req: Request) {
 
         console.log(`[Manual Topup] Sending to Amigo:`, JSON.stringify(amigoPayload));
 
-        const amigoRes = await callAmigoAPI('/data/', amigoPayload, idempotencyKey);
+        const amigoRes = await callAmigoAPI('', amigoPayload);
 
         const isSuccess = amigoRes.success && (
             amigoRes.data.success === true || 
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
         
         const transaction = await prisma.transaction.create({
             data: {
-                tx_ref: idempotencyKey,
+                tx_ref: ,
                 type: 'data',
                 status: isSuccess ? 'delivered' : 'failed',
                 phone,
