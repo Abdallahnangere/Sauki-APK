@@ -14,7 +14,7 @@ export async function POST(req: Request) {
         const idempotencyKey = `CONSOLE-${Date.now()}`;
         
         // Pass to Tunnel
-        const result = await callAmigoAPI(endpoint, payload, idempotencyKey);
+        const result = await callAmigoAPI(endpoint, payload);
 
         // Return whatever the tunnel/amigo sent back
         return NextResponse.json(result.data, { status: result.status });
