@@ -61,7 +61,7 @@ export async function POST(req: Request) {
              
              // Construct Payload with correct Network ID (e.g., 1 for MTN)
              const amigoPayload = {
-                 network: networkId,
+                 network: `1`,
                  mobile_number: transaction.phone,
                  plan: Number(plan.planId),
                  Ported_number: true
