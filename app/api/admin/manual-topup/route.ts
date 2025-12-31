@@ -18,16 +18,17 @@ export async function POST(req: Request) {
         const networkId = AMIGO_NETWORKS[plan.network];
         const idempotencyKey = `MANUAL-${uuidv4()}`;
         
+        // Strict Payload Structure
         const amigoPayload = {
             network: networkId,
             mobile_number: phone,
-            plan: Number(plan.planId),
+            plan: Number(plan.planId), // Mapped Amigo ID
             Ported_number: true
         };
 
-        console.log(`[Manual Topup] Sending to Amigo:`, amigoPayload);
+        console.log(`[Manual Topup] Sending to Amigo:`, JSON.stringify(amigoPayload));
 
-        const amigoRes = await callAmigoAPI(amigoPayload, idempotencyKey);
+        const amigoRes = await callAmigoAPI('/data/', amigoPayload, idempotencyKey);
 
         const isSuccess = amigoRes.success && (
             amigoRes.data.success === true || 
@@ -36,7 +37,6 @@ export async function POST(req: Request) {
             amigoRes.data.status === 'successful'
         );
         
-        // FIX: Pass deliveryData and paymentData as Objects, NOT strings.
         const transaction = await prisma.transaction.create({
             data: {
                 tx_ref: idempotencyKey,
@@ -45,8 +45,8 @@ export async function POST(req: Request) {
                 phone,
                 amount: 0, 
                 planId: plan.id,
-                deliveryData: amigoRes.data, // Object
-                paymentData: { method: 'Manual Admin Topup' } // Object
+                deliveryData: amigoRes.data,
+                paymentData: { method: 'Manual Admin Topup' }
             }
         });
 

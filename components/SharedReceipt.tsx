@@ -17,10 +17,11 @@ interface ReceiptProps {
 
 export const SharedReceipt = forwardRef<HTMLDivElement, ReceiptProps>(({ transaction }, ref) => {
   return (
-    <div className="fixed -left-[9999px]">
+    // Changed positioning technique to avoid rendering issues in some browsers
+    <div style={{ position: 'absolute', top: 0, left: 0, zIndex: -50, opacity: 0, pointerEvents: 'none' }}>
       <div 
         ref={ref} 
-        className="w-[450px] bg-white p-10 font-sans text-slate-900 relative overflow-hidden"
+        className="w-[450px] bg-white p-10 font-sans text-slate-900 relative overflow-hidden border border-slate-100"
         style={{ fontFamily: "'Inter', sans-serif" }}
       >
         {/* Decorative Top Border */}
@@ -29,7 +30,8 @@ export const SharedReceipt = forwardRef<HTMLDivElement, ReceiptProps>(({ transac
         {/* Header */}
         <div className="flex justify-between items-start mb-8 mt-2">
           <div>
-            <img src="/logo.png" alt="Sauki Mart" className="h-20 w-auto object-contain mb-2" />
+            {/* Added crossOrigin to ensure external images don't taint the canvas */}
+            <img src="/logo.png" alt="Sauki Mart" className="h-20 w-auto object-contain mb-2" crossOrigin="anonymous" />
             <p className="text-xs font-semibold tracking-widest uppercase text-slate-500">Official Receipt</p>
           </div>
           <div className="text-right">

@@ -13,7 +13,6 @@ import { toast } from '../../lib/toast';
 
 export const Data: React.FC = () => {
   const [plans, setPlans] = useState<DataPlan[]>([]);
-  // 'MTN' | 'AIRTEL' | 'GLO' - Matches keys in AMIGO_NETWORKS
   const [selectedNetwork, setSelectedNetwork] = useState<NetworkType | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<DataPlan | null>(null);
   const [phone, setPhone] = useState('');
@@ -62,7 +61,7 @@ export const Data: React.FC = () => {
     : [];
 
   const handleNetworkSelect = (net: NetworkType) => {
-    setSelectedNetwork(net); // Sets 'MTN', 'AIRTEL', etc.
+    setSelectedNetwork(net);
     setStep('plans');
   };
 
@@ -75,7 +74,6 @@ export const Data: React.FC = () => {
     if (!selectedPlan || phone.length < 10) return;
     setIsLoading(true);
     try {
-        // Sends planId to backend. Backend looks up Plan -> Network String -> AMIGO_NETWORKS ID
         const res = await api.initiateDataPayment({ planId: selectedPlan.id, phone });
         setPaymentDetails(res);
         setStep('payment');
@@ -304,4 +302,3 @@ export const Data: React.FC = () => {
     </div>
   );
 };
-

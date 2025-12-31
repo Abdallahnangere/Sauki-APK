@@ -34,7 +34,6 @@ export async function POST(req: Request) {
         return NextResponse.json({ received: true });
     }
 
-    // 1. Update status to PAID if not already
     if (transaction.status !== 'paid') {
         await prisma.transaction.update({
             where: { id: transaction.id },
@@ -45,37 +44,22 @@ export async function POST(req: Request) {
         });
     }
 
-    // 2. Attempt Delivery
     if (transaction.type === 'data' && transaction.planId) {
          const plan = await prisma.dataPlan.findUnique({ where: { id: transaction.planId } });
          
          if (plan) {
-             // NORMALIZE: Ensure we look up 'MTN' even if DB has 'mtn'
-             const normalizedNetwork = plan.network.toUpperCase();
-             const networkId = AMIGO_NETWORKS[normalizedNetwork];
-
-             console.log(`[Webhook] Processing Data for ${transaction.phone}. Network: ${normalizedNetwork} -> ID: ${networkId}`);
-
-             if (!networkId) {
-                 console.error(`[Webhook] ❌ Critical: No ID mapped for network ${plan.network}`);
-                 return NextResponse.json({ error: 'Invalid Network Mapping' }, { status: 400 });
-             }
+             const networkId = AMIGO_NETWORKS[plan.network];
              
-             // Construct Payload
+             // Strict Payload Structure
              const amigoPayload = {
                  network: networkId,
                  mobile_number: transaction.phone,
-                 plan: Number(plan.planId),
+                 plan: Number(plan.planId), // Mapped Amigo ID
                  Ported_number: true
              };
 
-             const amigoRes = await callAmigoAPI(amigoPayload, reference);
+             const amigoRes = await callAmigoAPI('/data/', amigoPayload, reference);
              
-             // Log the exact response for debugging
-             if (!amigoRes.success) {
-                 console.error(`[Webhook] API Failure Response:`, JSON.stringify(amigoRes.data));
-             }
-
              const isSuccess = amigoRes.success && (
                 amigoRes.data.success === true || 
                 amigoRes.data.Status === 'successful' ||

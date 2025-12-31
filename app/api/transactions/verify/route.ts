@@ -10,29 +10,26 @@ export async function POST(req: Request) {
     const transaction = await prisma.transaction.findUnique({ where: { tx_ref } });
     if (!transaction) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
 
-    // If already delivered, stop here
     if (transaction.status === 'delivered') return NextResponse.json({ status: 'delivered' });
     
     let currentStatus = transaction.status;
 
-    // 1. Verify with Flutterwave (if not already paid)
+    // 1. Verify with Flutterwave
     if (currentStatus === 'pending') {
         try {
             const flwVerify = await axios.get(`https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref=${tx_ref}`, {
                 headers: { Authorization: `Bearer ${process.env.FLUTTERWAVE_SECRET_KEY}` }
             });
 
-            // flwVerify.data is the axios wrapper, flwVerify.data.data is the actual payment info
             const flwData = flwVerify.data.data;
 
             if (flwVerify.data.status === 'success' && (flwData.status === 'successful' || flwData.status === 'completed')) {
-                // Check amount matches expected
                 if (flwData.amount >= transaction.amount) {
                     await prisma.transaction.update({
                         where: { id: transaction.id },
                         data: { 
                             status: 'paid', 
-                            paymentData: flwData // Stores as JSON object
+                            paymentData: flwData
                         }
                     });
                     currentStatus = 'paid';
@@ -51,15 +48,15 @@ export async function POST(req: Request) {
         if (plan) {
             const networkId = AMIGO_NETWORKS[plan.network];
             
+            // Strict Payload Structure
             const amigoPayload = {
                 network: networkId,
                 mobile_number: transaction.phone,
-                plan: Number(plan.planId),
+                plan: Number(plan.planId), // Mapped Amigo ID
                 Ported_number: true
             };
 
-            // FIX: Updated to match new lib.ts signature: (payload, key, endpoint)
-            const amigoRes = await callAmigoAPI(amigoPayload, tx_ref, '');
+            const amigoRes = await callAmigoAPI('/data/', amigoPayload, tx_ref);
 
             const isSuccess = amigoRes.success && (
                 amigoRes.data.success === true || 
@@ -73,7 +70,7 @@ export async function POST(req: Request) {
                     where: { id: transaction.id },
                     data: {
                         status: 'delivered',
-                        deliveryData: amigoRes.data // Stores as JSON object
+                        deliveryData: amigoRes.data
                     }
                 });
                 currentStatus = 'delivered';
@@ -87,4 +84,4 @@ export async function POST(req: Request) {
     console.error('Verification Error:', error);
     return NextResponse.json({ error: 'Verification failed' }, { status: 500 });
   }
-        }
+}

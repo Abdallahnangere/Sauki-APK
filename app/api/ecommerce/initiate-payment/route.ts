@@ -29,7 +29,7 @@ export async function POST(req: Request) {
       phone_number: phone,
       currency: "NGN",
       fullname: name,
-      narration: `Sauki Mart FLW `,
+      narration: `Product: ${product.name}`,
       meta: {
         consumer_state: state
       },
@@ -50,23 +50,26 @@ export async function POST(req: Request) {
 
         const responseBody = flwResponse.data;
 
-        // 1. Check for success status
         if (responseBody.status !== 'success') {
           console.error('[Flutterwave Error]', responseBody);
           throw new Error(responseBody.message || 'Payment initialization failed');
         }
 
-        // 2. SMART EXTRACTION: Check for 'meta' at ROOT first, then inside 'data'
-        const metaObj = responseBody.meta || responseBody.data?.meta;
-        const bankInfo = metaObj?.authorization;
+        const data = responseBody.data;
 
-        // 3. Validate Bank Info
+        // STRICT CHECK
+        if (!data) {
+             console.error('[Flutterwave Error] Response missing data object:', responseBody);
+             throw new Error('Payment gateway returned empty data.');
+        }
+
+        const bankInfo = data.meta?.authorization;
+
         if (!bankInfo || !bankInfo.transfer_bank || !bankInfo.transfer_account) {
-            console.error('[Flutterwave Error] Missing bank details:', JSON.stringify(responseBody, null, 2));
+            console.error('[Flutterwave Error] Missing bank details in meta:', JSON.stringify(data, null, 2));
             throw new Error('Payment gateway did not return bank account details.');
         }
 
-        // 4. Save to DB using the full responseBody
         await prisma.transaction.create({
           data: {
             tx_ref,
@@ -78,11 +81,10 @@ export async function POST(req: Request) {
             customerName: name,
             deliveryState: state,
             idempotencyKey: uuidv4(),
-            paymentData: responseBody, // Save the full response JSON safely
+            paymentData: data, 
           }
         });
 
-        // 5. Return success response
         return NextResponse.json({
           tx_ref,
           bank: bankInfo.transfer_bank,

@@ -28,7 +28,7 @@ export async function POST(req: Request) {
       email: "saukidatalinks@gmail.com",
       phone_number: phone,
       currency: "NGN",
-      narration: ` Sauki Mart FLW `,
+      narration: `Data: ${plan.network} ${plan.data}`,
       is_permanent: false
     };
 
@@ -46,25 +46,27 @@ export async function POST(req: Request) {
 
         const responseBody = flwResponse.data;
 
-        // 1. Check for success status
         if (responseBody.status !== 'success') {
           console.error('[Flutterwave Error]', responseBody);
           throw new Error(responseBody.message || 'Payment initialization failed');
         }
 
-        // 2. SMART EXTRACTION: Check for 'meta' at ROOT first, then inside 'data'
-        // Bank transfers often return meta at the root: { status: 'success', meta: { authorization: ... } }
-        const metaObj = responseBody.meta || responseBody.data?.meta;
-        const bankInfo = metaObj?.authorization;
+        const data = responseBody.data;
 
-        // 3. Validate Bank Info
-        if (!bankInfo || !bankInfo.transfer_bank || !bankInfo.transfer_account) {
-            console.error('[Flutterwave Error] Missing bank details:', JSON.stringify(responseBody, null, 2));
-            throw new Error('Payment gateway did not return bank account details. Please try again.');
+        // STRICT CHECK: Ensure data and meta exist
+        if (!data) {
+             console.error('[Flutterwave Error] Response missing data object:', responseBody);
+             throw new Error('Payment gateway returned empty data.');
         }
 
-        // 4. Save to DB
-        // We save the entire 'responseBody' (or just the useful parts) to paymentData
+        const bankInfo = data.meta?.authorization;
+
+        if (!bankInfo || !bankInfo.transfer_bank || !bankInfo.transfer_account) {
+            console.error('[Flutterwave Error] Missing bank details in meta:', JSON.stringify(data, null, 2));
+            throw new Error('Payment gateway did not return bank account details. Please try again or contact support.');
+        }
+
+        // Save to DB (Store paymentData as object, not string)
         await prisma.transaction.create({
           data: {
             tx_ref,
@@ -74,11 +76,10 @@ export async function POST(req: Request) {
             amount,
             planId,
             idempotencyKey: uuidv4(),
-            paymentData: responseBody, // Save the full response JSON
+            paymentData: data, 
           }
         });
 
-        // 5. Return success response
         return NextResponse.json({
           tx_ref,
           bank: bankInfo.transfer_bank,

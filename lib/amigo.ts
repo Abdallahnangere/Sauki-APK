@@ -10,57 +10,50 @@ const API_KEY = process.env.AMIGO_API_KEY || '';
 let httpsAgent: any = undefined;
 if (PROXY_URL) {
     try {
-        // This tunnels the connection through your AWS Squid Proxy
         httpsAgent = new HttpsProxyAgent(PROXY_URL);
     } catch (e) {
         console.error("Failed to initialize Proxy Agent", e);
     }
 }
 
-// Create Axios Instance with cleaner config
 export const amigoClient = axios.create({
   httpsAgent: httpsAgent,
-  proxy: false, // Must be false to let HttpsProxyAgent handle it
+  proxy: false, 
   headers: {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${API_KEY}`, 
     'Token': API_KEY, 
-    'X-API-Key': API_KEY, // Sending key in multiple headers to ensure compatibility
+    'X-API-Key': API_KEY,
     'Accept': 'application/json',
   },
   timeout: 60000, 
 });
 
 /**
- * NETWORK MAPPING (UPDATED based on API Error Log)
- * The error log stated: "Network must be 1 (MTN) or 2 (Glo). Airtel(4)/9mobile(9)"
- */
-export const AMIGO_NETWORKS: Record<string, number> = {
-  'MTN': 1,       // Standard ID for MTN
-  'GLO': 2,       // Standard ID for GLO
-  'AIRTEL': 4,    // UPDATED: API expects 4 for Airtel
-  '9MOBILE': 9,   // UPDATED: API expects 9 for 9mobile
-  'ETISALAT': 9   // Fallback alias
-};
-
-/**
  * Helper to call Amigo endpoints.
- * Routes traffic through the configured AWS Proxy.
+ * Automatically handles URL construction to prevent duplication.
  */
-export async function callAmigoAPI(payload: any, idempotencyKey?: string, endpoint: string = '') {
-  // 1. Sanitize Base URL (Remove trailing slash)
-  const baseUrl = AMIGO_BASE.replace(/\/$/, '');
+export async function callAmigoAPI(endpoint: string, payload: any, idempotencyKey?: string) {
+  // Normalize Base URL (remove trailing slash)
+  let baseUrl = AMIGO_BASE.replace(/\/$/, '');
   
-  // 2. Prepare Path (only add slash if endpoint exists)
-  let path = '';
-  if (endpoint) {
-    path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  }
-  
-  // 3. Construct Full URL
-  const fullUrl = `${baseUrl}${path}`;
+  // Normalize Endpoint (ensure leading slash)
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
 
-  console.log(`[Amigo Tunnel] 🚀 Requesting: ${fullUrl} via ${PROXY_URL ? 'Proxy' : 'Direct'}`);
+  // INTELLIGENT URL CONSTRUCTION
+  // If base URL already ends with the first part of the endpoint, do not append it again.
+  // Example: Base '.../api/data' and Endpoint '/data/' -> Keep '.../api/data'
+  let fullUrl = `${baseUrl}${cleanEndpoint}`;
+  
+  if (cleanEndpoint === '/data/' || cleanEndpoint === '/data') {
+      if (baseUrl.endsWith('/data')) {
+          fullUrl = baseUrl; // Base already includes the endpoint
+      } else if (baseUrl.endsWith('/data/')) {
+           fullUrl = baseUrl.slice(0, -1); // Remove trailing slash from base
+      }
+  }
+
+  console.log(`[Amigo Tunnel] 🚀 Requesting: ${fullUrl}`);
 
   try {
     const headers: Record<string, string> = {};
@@ -68,7 +61,6 @@ export async function callAmigoAPI(payload: any, idempotencyKey?: string, endpoi
       headers['Idempotency-Key'] = idempotencyKey;
     }
 
-    // Important: We pass the full URL. HttpsProxyAgent handles the CONNECT method.
     const response = await amigoClient.post(fullUrl, payload, { headers });
     
     console.log(`[Amigo Tunnel] ✅ Success: ${response.status}`);
@@ -89,3 +81,10 @@ export async function callAmigoAPI(payload: any, idempotencyKey?: string, endpoi
     };
   }
 }
+
+export const AMIGO_NETWORKS: Record<string, number> = {
+  'MTN': 1,
+  'GLO': 2,
+  'AIRTEL': 3,
+  '9MOBILE': 4
+};
