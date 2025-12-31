@@ -1,1 +1,72 @@
-���Ȭʋ�
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  description String
+  price       Float
+  image       String
+  inStock     Boolean  @default(true)
+  category    String   @default("device") // 'device' or 'sim'
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  transactions Transaction[]
+}
+
+model DataPlan {
+  id        String   @id @default(uuid())
+  network   String   // MTN, AIRTEL, GLO
+  data      String
+  validity  String
+  price     Float
+  planId    Int      // Amigo Plan ID
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions Transaction[]
+}
+
+model Transaction {
+  id             String   @id @default(uuid())
+  tx_ref         String   @unique
+  type           String   // 'ecommerce' or 'data'
+  status         String   @default("pending") // pending, paid, delivered, failed
+  phone          String
+  amount         Float
+  
+  // Relations
+  productId      String?
+  product        Product? @relation(fields: [productId], references: [id])
+  
+  planId         String?
+  dataPlan       DataPlan? @relation(fields: [planId], references: [id])
+  
+  // E-commerce specifics
+  customerName   String?
+  deliveryState  String?
+  
+  // Technical
+  paymentData    Json?
+  deliveryData   Json?
+  idempotencyKey String?  @unique
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model SystemMessage {
+  id        String   @id @default(uuid())
+  content   String
+  type      String   // info, warning, alert
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
