@@ -50,18 +50,20 @@ export async function POST(req: Request) {
          const plan = await prisma.dataPlan.findUnique({ where: { id: transaction.planId } });
          
          if (plan) {
-             // CROSSCHECK: Ensure the network string from DB (e.g., 'MTN') exists in our mapping
-             const networkId = AMIGO_NETWORKS[plan.network];
+             // NORMALIZE: Ensure we look up 'MTN' even if DB has 'mtn'
+             const normalizedNetwork = plan.network.toUpperCase();
+             const networkId = AMIGO_NETWORKS[normalizedNetwork];
+
+             console.log(`[Webhook] Processing Data for ${transaction.phone}. Network: ${normalizedNetwork} -> ID: ${networkId}`);
 
              if (!networkId) {
                  console.error(`[Webhook] ❌ Critical: No ID mapped for network ${plan.network}`);
-                 // Optionally flag transaction as failed-delivery or requires-manual-review here
                  return NextResponse.json({ error: 'Invalid Network Mapping' }, { status: 400 });
              }
              
-             // Construct Payload with correct Network ID (e.g., 1 for MTN)
+             // Construct Payload
              const amigoPayload = {
-                 network: `1`,
+                 network: networkId,
                  mobile_number: transaction.phone,
                  plan: Number(plan.planId),
                  Ported_number: true
@@ -69,6 +71,11 @@ export async function POST(req: Request) {
 
              const amigoRes = await callAmigoAPI(amigoPayload, reference);
              
+             // Log the exact response for debugging
+             if (!amigoRes.success) {
+                 console.error(`[Webhook] API Failure Response:`, JSON.stringify(amigoRes.data));
+             }
+
              const isSuccess = amigoRes.success && (
                 amigoRes.data.success === true || 
                 amigoRes.data.Status === 'successful' ||
