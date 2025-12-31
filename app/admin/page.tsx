@@ -21,7 +21,10 @@ export default function AdminPage() {
   // Forms
   const [productForm, setProductForm] = useState<Partial<Product>>({ name: '', description: '', price: 0, image: '' });
   const [planForm, setPlanForm] = useState<Partial<DataPlan>>({ network: 'MTN', data: '', validity: '30 Days', price: 0, planId: 0 });
+  
+  // --- MANUAL TOPUP FORM STATE ---
   const [manualForm, setManualForm] = useState({ phone: '', planId: '' });
+  
   const [editMode, setEditMode] = useState(false);
   
   // Broadcast Form
@@ -135,8 +138,13 @@ export default function AdminPage() {
       fetchData();
   };
 
+  // --- UPDATED MANUAL TOPUP HANDLER ---
   const handleManualTopup = async () => {
       if (!manualForm.phone || !manualForm.planId) return alert("Fill all fields");
+      
+      const selectedPlan = plans.find(p => p.id === manualForm.planId);
+      if(!confirm(`Confirm Manual Topup?\n\nSend: ${selectedPlan?.network} ${selectedPlan?.data}\nTo: ${manualForm.phone}`)) return;
+
       setLoading(true);
       const res = await fetch('/api/admin/manual-topup', { 
           method: 'POST', 
@@ -146,11 +154,11 @@ export default function AdminPage() {
       const data = await res.json();
       setLoading(false);
       if (res.ok) {
-          alert("Topup Successful!");
+          alert("Topup Successful! Transaction logged.");
           setManualForm({ phone: '', planId: '' });
           fetchData();
       } else {
-          alert("Failed: " + JSON.stringify(data));
+          alert("Failed: " + (data.error || JSON.stringify(data)));
       }
   };
 
@@ -635,7 +643,12 @@ export default function AdminPage() {
                             <label className="block text-sm font-bold text-slate-700 mb-2">Select Plan (Amigo Configured)</label>
                             <select className="border p-4 rounded-xl w-full bg-slate-50" value={manualForm.planId} onChange={e => setManualForm({...manualForm, planId: e.target.value})}>
                                 <option value="">-- Choose Data Plan --</option>
-                                {plans.map(p => <option key={p.id} value={p.id}>{p.network} {p.data} (Amigo ID: {p.planId})</option>)}
+                                {[...plans]
+                                    .sort((a, b) => a.network.localeCompare(b.network) || a.price - b.price)
+                                    .map(p => (
+                                        <option key={p.id} value={p.id}>{p.network} {p.data} - {formatCurrency(p.price)} (Amigo ID: {p.planId})</option>
+                                    ))
+                                }
                             </select>
                          </div>
                          <button onClick={handleManualTopup} disabled={loading} className="w-full bg-purple-600 text-white p-4 rounded-xl font-bold flex justify-center items-center gap-2 hover:bg-purple-700 shadow-lg shadow-purple-200 transition">
@@ -709,3 +722,4 @@ export default function AdminPage() {
     </div>
   );
 }
+
