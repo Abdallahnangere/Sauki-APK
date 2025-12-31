@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { cn, formatCurrency } from '../../lib/utils';
-import { Loader2, Upload, Lock, Trash2, Edit2, Send, Download, Search, Package, Wifi, LayoutDashboard, LogOut, Terminal, Play, RotateCcw, Megaphone, CreditCard, Activity, TrendingUp, CheckCircle, Smartphone } from 'lucide-react';
+import { Loader2, Upload, Lock, Trash2, Edit2, Send, Download, Search, Package, Wifi, LayoutDashboard, LogOut, Terminal, Play, RotateCcw, Megaphone, CreditCard, Activity, TrendingUp, CheckCircle, Smartphone, MapPin, List } from 'lucide-react';
 import { DataPlan, Product, Transaction } from '../../types';
 import { SharedReceipt } from '../../components/SharedReceipt';
 import { toPng } from 'html-to-image';
@@ -94,30 +94,41 @@ export default function AdminPage() {
   const handleDownloadReceipt = async (tx: Transaction) => {
       const getDesc = (tx: Transaction) => {
         if (tx.type === 'data') return `${tx.dataPlan?.network} ${tx.dataPlan?.data}`;
-        return tx.product?.name || 'Item';
+        // Extract manifest from deliveryData if available
+        return (tx.deliveryData as any)?.manifest || tx.product?.name || 'Device Package';
       };
       
       setReceiptTx({
           tx_ref: tx.tx_ref,
           amount: tx.amount,
-          date: new Date(tx.createdAt).toLocaleString(),
+          date: new Date(tx.createdAt).toLocaleDateString() + ' ' + new Date(tx.createdAt).toLocaleTimeString(),
           type: tx.type === 'ecommerce' ? 'Corporate Order' : 'Data Bundle',
           description: getDesc(tx),
           status: tx.status,
           customerPhone: tx.phone,
-          customerName: tx.customerName
+          customerName: tx.customerName,
+          deliveryAddress: tx.deliveryState || (tx.deliveryData as any)?.address
       });
       
+      // Delay to ensure SharedReceipt component re-renders with new props
       setTimeout(async () => {
           if (receiptRef.current) {
-              const dataUrl = await toPng(receiptRef.current, { cacheBust: true, pixelRatio: 3 });
-              const link = document.createElement('a');
-              link.download = `RECEIPT-${tx.tx_ref}.png`;
-              link.href = dataUrl;
-              link.click();
-              setReceiptTx(null);
+              try {
+                  const dataUrl = await toPng(receiptRef.current, { 
+                      cacheBust: true, 
+                      pixelRatio: 4, // Ultra-high res
+                      backgroundColor: '#ffffff'
+                  });
+                  const link = document.createElement('a');
+                  link.download = `SAUKI-ADMIN-RECEIPT-${tx.tx_ref}.png`;
+                  link.href = dataUrl;
+                  link.click();
+                  setReceiptTx(null);
+              } catch (err) {
+                  alert("Receipt capture failed. Ensure off-screen container is initialized.");
+              }
           }
-      }, 500);
+      }, 800);
   };
 
   const saveProduct = async () => {
@@ -233,7 +244,6 @@ export default function AdminPage() {
       } finally { setLoading(false); }
   };
 
-  // Improved Dynamic Filter for Transactions
   const filteredTransactions = transactions.filter(t => {
       const query = searchQuery.toLowerCase().trim();
       if (!query) return true;
@@ -270,9 +280,8 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans">
-        <div className="hidden">
-           {receiptTx && <SharedReceipt ref={receiptRef} transaction={receiptTx} />}
-        </div>
+        {/* Off-screen Receipt for High-Quality Capture */}
+        {receiptTx && <SharedReceipt ref={receiptRef} transaction={receiptTx} />}
 
         {/* Sidebar */}
         <aside className="w-72 bg-slate-900 text-white hidden lg:flex flex-col fixed h-full z-10 shadow-2xl">
@@ -314,9 +323,12 @@ export default function AdminPage() {
                 <div className="flex items-center gap-4">
                     <div className="relative">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                        <input type="text" placeholder="Search reference, phone, name..." className="pl-11 pr-6 py-3 bg-white border border-slate-100 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-slate-900 w-64 shadow-sm" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                        <input type="text" placeholder="Search orders..." className="pl-11 pr-6 py-3 bg-white border border-slate-100 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-slate-900 w-64 shadow-sm" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                     </div>
-                    <button onClick={fetchData} className="p-3 bg-white border border-slate-100 rounded-2xl shadow-sm hover:bg-slate-50 transition-colors"><RotateCcw className={cn("w-5 h-5 text-slate-600", loading && "animate-spin")} /></button>
+                    <button onClick={fetchData} title="Sync/Restore Analytics" className="p-3 bg-white border border-slate-100 rounded-2xl shadow-sm hover:bg-slate-50 transition-all flex items-center gap-2 group">
+                        <RotateCcw className={cn("w-5 h-5 text-slate-600 group-active:rotate-180 transition-transform duration-500", loading && "animate-spin")} />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 hidden md:block">Restore Analytics</span>
+                    </button>
                 </div>
             </header>
 
@@ -325,16 +337,16 @@ export default function AdminPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                         {[
                             { label: 'Total Revenue', value: formatCurrency(stats.totalRevenue), icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50' },
-                            { label: 'E-commerce Orders', value: stats.totalOrders, icon: Package, color: 'text-blue-600', bg: 'bg-blue-50' },
-                            { label: 'Data Delivered', value: stats.totalData, icon: Wifi, color: 'text-purple-600', bg: 'bg-purple-50' },
-                            { label: 'Inventory Items', value: stats.activeProducts, icon: Smartphone, color: 'text-orange-600', bg: 'bg-orange-50' },
+                            { label: 'Store Sales', value: stats.totalOrders, icon: Package, color: 'text-blue-600', bg: 'bg-blue-50' },
+                            { label: 'Bundles Push', value: stats.totalData, icon: Wifi, color: 'text-purple-600', bg: 'bg-purple-50' },
+                            { label: 'Active Items', value: stats.activeProducts, icon: Smartphone, color: 'text-orange-600', bg: 'bg-orange-50' },
                         ].map((stat, i) => (
-                            <div key={i} className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm">
+                            <div key={i} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm transition-all hover:shadow-xl hover:shadow-slate-200/40">
                                 <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center mb-6 shadow-inner", stat.bg)}>
                                     <stat.icon className={cn("w-6 h-6", stat.color)} />
                                 </div>
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{stat.label}</p>
-                                <p className="text-2xl font-black text-slate-900 tracking-tight">{stat.value}</p>
+                                <p className="text-2xl font-black text-slate-900 tracking-tighter">{stat.value}</p>
                             </div>
                         ))}
                     </div>
@@ -342,78 +354,98 @@ export default function AdminPage() {
             )}
 
             {view === 'orders' && (
-                <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
-                    <table className="w-full text-left">
-                        <thead className="bg-slate-50 border-b border-slate-100">
-                            <tr>
-                                <th className="p-6 text-[10px] font-black uppercase text-slate-400">Customer</th>
-                                <th className="p-6 text-[10px] font-black uppercase text-slate-400">Ref</th>
-                                <th className="p-6 text-[10px] font-black uppercase text-slate-400">Item</th>
-                                <th className="p-6 text-[10px] font-black uppercase text-slate-400">Status</th>
-                                <th className="p-6 text-[10px] font-black uppercase text-slate-400 text-right">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {ecommerceOrders.map(order => (
-                                <tr key={order.id} className="hover:bg-slate-50 transition-colors">
-                                    <td className="p-6">
-                                        <p className="font-black text-slate-900 text-sm uppercase">{order.customerName}</p>
-                                        <p className="text-[10px] text-slate-500 font-bold">{order.phone}</p>
-                                    </td>
-                                    <td className="p-6 font-mono text-[10px] text-slate-400">{order.tx_ref}</td>
-                                    <td className="p-6 text-xs font-bold text-slate-600 uppercase">{order.product?.name || 'Device'}</td>
-                                    <td className="p-6">
-                                        <span className={cn("text-[9px] font-black uppercase px-3 py-1 rounded-full", order.status === 'delivered' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700')}>
-                                            {order.status}
-                                        </span>
-                                    </td>
-                                    <td className="p-6 text-right">
-                                        <div className="flex justify-end gap-2">
-                                            {order.status !== 'delivered' && (
-                                                <button 
-                                                    onClick={() => handleStatusUpdate(order.tx_ref, 'delivered')}
-                                                    className="bg-green-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-green-100"
-                                                >
-                                                    Mark Delivered
-                                                </button>
-                                            )}
-                                            <button onClick={() => handleDownloadReceipt(order)} className="p-2 bg-slate-100 rounded-xl text-slate-600 hover:bg-slate-200"><Download className="w-4 h-4" /></button>
-                                        </div>
-                                    </td>
+                <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                            <thead className="bg-slate-50/50 border-b border-slate-100">
+                                <tr>
+                                    <th className="p-6 text-[10px] font-black uppercase text-slate-400">Recipient & Logistics</th>
+                                    <th className="p-6 text-[10px] font-black uppercase text-slate-400">Order Ref</th>
+                                    <th className="p-6 text-[10px] font-black uppercase text-slate-400">Full Items Manifest</th>
+                                    <th className="p-6 text-[10px] font-black uppercase text-slate-400">Status</th>
+                                    <th className="p-6 text-[10px] font-black uppercase text-slate-400 text-right">Fulfillment</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {ecommerceOrders.map(order => (
+                                    <tr key={order.id} className="hover:bg-slate-50/50 transition-colors">
+                                        <td className="p-6 min-w-[250px]">
+                                            <p className="font-black text-slate-900 text-sm uppercase leading-none">{order.customerName}</p>
+                                            <p className="text-[11px] text-blue-600 font-black mt-1.5">{order.phone}</p>
+                                            <div className="mt-3 flex items-start gap-2 bg-white p-2 rounded-xl border border-slate-100 shadow-inner">
+                                                <MapPin className="w-3 h-3 text-slate-400 mt-0.5 shrink-0" />
+                                                <p className="text-[10px] text-slate-500 font-bold uppercase leading-relaxed break-words">
+                                                    {order.deliveryState || (order.deliveryData as any)?.address || "N/A"}
+                                                </p>
+                                            </div>
+                                        </td>
+                                        <td className="p-6 font-mono text-[10px] text-slate-400 uppercase tracking-tighter">{order.tx_ref}</td>
+                                        <td className="p-6">
+                                            <div className="flex flex-col gap-1.5 max-w-[300px]">
+                                                <div className="flex items-center gap-2 text-slate-900 font-black text-xs uppercase">
+                                                    <List className="w-3.5 h-3.5 text-blue-600" />
+                                                    {(order.deliveryData as any)?.manifest || order.product?.name || "Multiple Items"}
+                                                </div>
+                                                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{formatCurrency(order.amount)}</p>
+                                            </div>
+                                        </td>
+                                        <td className="p-6">
+                                            <span className={cn("text-[9px] font-black uppercase px-4 py-2 rounded-xl tracking-widest", order.status === 'delivered' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700')}>
+                                                {order.status}
+                                            </span>
+                                        </td>
+                                        <td className="p-6 text-right">
+                                            <div className="flex justify-end gap-3">
+                                                {order.status !== 'delivered' && (
+                                                    <button 
+                                                        onClick={() => handleStatusUpdate(order.tx_ref, 'delivered')}
+                                                        className="bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] shadow-xl shadow-green-100 transition-all active:scale-95"
+                                                    >
+                                                        Mark Delivered
+                                                    </button>
+                                                )}
+                                                <button onClick={() => handleDownloadReceipt(order)} className="p-3 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-all shadow-xl shadow-slate-200"><Download className="w-5 h-5" /></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             )}
 
             {view === 'transactions' && (
                 <div className="space-y-4">
                     {filteredTransactions.map(tx => (
-                        <div key={tx.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex justify-between items-center group">
-                            <div className="flex items-center gap-6">
-                                <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center shadow-inner", tx.type === 'data' ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600')}>
-                                    {tx.type === 'data' ? <Wifi className="w-6 h-6" /> : <Package className="w-6 h-6" />}
+                        <div key={tx.id} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6 group hover:shadow-xl transition-all">
+                            <div className="flex items-center gap-8">
+                                <div className={cn("w-16 h-16 rounded-[1.5rem] flex items-center justify-center shadow-inner", tx.type === 'data' ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600')}>
+                                    {tx.type === 'data' ? <Wifi className="w-7 h-7" /> : <Package className="w-7 h-7" />}
                                 </div>
                                 <div>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{tx.tx_ref}</p>
-                                    <p className="font-black text-slate-900 text-base uppercase tracking-tight">
-                                        {tx.type === 'data' ? `${tx.dataPlan?.network} ${tx.dataPlan?.data}` : tx.product?.name || 'Device'}
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{tx.tx_ref}</p>
+                                    <p className="font-black text-slate-900 text-lg uppercase tracking-tighter">
+                                        {tx.type === 'data' ? `${tx.dataPlan?.network} ${tx.dataPlan?.data}` : (tx.deliveryData as any)?.manifest || tx.product?.name || 'Device Package'}
                                     </p>
-                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{tx.phone}</p>
+                                    <div className="flex items-center gap-4 mt-1">
+                                        <p className="text-[11px] text-blue-600 font-black uppercase tracking-widest">{tx.phone}</p>
+                                        <span className="w-1 h-1 rounded-full bg-slate-200"></span>
+                                        <p className="text-[10px] text-slate-400 font-bold uppercase">{new Date(tx.createdAt).toLocaleString()}</p>
+                                    </div>
                                 </div>
                             </div>
-                            <div className="text-right flex items-center gap-6">
-                                <div className="text-right">
-                                    <p className="font-black text-slate-900 text-lg tracking-tighter">{formatCurrency(tx.amount)}</p>
-                                    <p className="text-[10px] text-slate-400 font-black uppercase">{new Date(tx.createdAt).toLocaleDateString()}</p>
+                            <div className="text-right flex items-center gap-8 w-full md:w-auto border-t md:border-t-0 pt-4 md:pt-0">
+                                <div className="text-left md:text-right flex-1 md:flex-none">
+                                    <p className="font-black text-slate-900 text-2xl tracking-tighter">{formatCurrency(tx.amount)}</p>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{tx.type === 'ecommerce' ? 'Direct Sale' : 'Bundle Topup'}</p>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <span className={cn("text-[9px] font-black uppercase px-4 py-2 rounded-xl", tx.status === 'delivered' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700')}>
+                                    <span className={cn("text-[9px] font-black uppercase px-5 py-2.5 rounded-xl tracking-widest", tx.status === 'delivered' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700')}>
                                         {tx.status}
                                     </span>
                                     {(tx.status === 'delivered' || tx.status === 'paid') && (
-                                        <button onClick={() => handleDownloadReceipt(tx)} className="p-3 bg-slate-50 rounded-xl text-slate-500 hover:bg-slate-900 hover:text-white transition-all"><Download className="w-5 h-5" /></button>
+                                        <button onClick={() => handleDownloadReceipt(tx)} className="p-4 bg-slate-900 rounded-2xl text-white hover:bg-slate-800 transition-all shadow-2xl shadow-slate-200"><Download className="w-6 h-6" /></button>
                                     )}
                                 </div>
                             </div>
@@ -426,71 +458,72 @@ export default function AdminPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                      <div className="lg:col-span-2 bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden h-fit">
                          <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                            <h3 className="font-black text-lg uppercase tracking-tight">Existing {view}</h3>
+                            <h3 className="font-black text-lg uppercase tracking-tight">Existing Inventory</h3>
                             <button onClick={() => { setEditMode(false); setProductForm({category: 'device'}); setPlanForm({}); }} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg">+ New Entry</button>
                          </div>
-                         <div className="max-h-[650px] overflow-y-auto p-6 space-y-3 no-scrollbar">
+                         <div className="max-h-[650px] overflow-y-auto p-8 space-y-4 no-scrollbar">
                             {(view === 'products' ? products : plans).map((item: any) => (
-                                <div key={item.id} className="flex justify-between items-center p-5 bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group">
-                                    <div className="flex items-center gap-5">
+                                <div key={item.id} className="flex justify-between items-center p-6 bg-white rounded-[1.75rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group">
+                                    <div className="flex items-center gap-6">
                                         {view === 'products' && (
-                                            <div className="w-14 h-14 bg-slate-50 rounded-xl p-2 border border-slate-100 flex items-center justify-center overflow-hidden">
+                                            <div className="w-16 h-16 bg-slate-50 rounded-2xl p-3 border border-slate-100 flex items-center justify-center overflow-hidden">
                                                 <img src={item.image} className="w-full h-full object-contain" alt="Preview" />
                                             </div>
                                         )}
                                         <div>
-                                            <div className="font-black text-slate-900 uppercase text-sm tracking-tight">{item.name || `${item.network} ${item.data}`}</div>
-                                            <div className="text-[10px] text-slate-500 font-bold uppercase flex items-center gap-2">
-                                                {formatCurrency(item.price)} 
-                                                {view === 'products' && <span className="bg-slate-100 px-2 py-0.5 rounded text-[8px]">{item.category}</span>}
+                                            <div className="font-black text-slate-900 uppercase text-base tracking-tight">{item.name || `${item.network} ${item.data}`}</div>
+                                            <div className="text-[11px] text-slate-500 font-bold uppercase flex items-center gap-3 mt-1">
+                                                <span className="text-blue-600">{formatCurrency(item.price)}</span>
+                                                <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                                                {view === 'products' && <span className="bg-slate-100 px-3 py-1 rounded-lg text-[9px] font-black">{item.category}</span>}
                                             </div>
                                         </div>
                                     </div>
                                     <div className="flex gap-2">
-                                        <button onClick={() => { setEditMode(true); view === 'products' ? setProductForm(item) : setPlanForm(item); }} className="p-3 bg-white border border-slate-100 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition-all"><Edit2 className="w-4 h-4" /></button>
-                                        <button onClick={() => view === 'products' ? deleteProduct(item.id) : deletePlan(item.id)} className="p-3 bg-white border border-slate-100 rounded-xl hover:bg-red-50 hover:text-red-600 transition-all"><Trash2 className="w-4 h-4" /></button>
+                                        <button onClick={() => { setEditMode(true); view === 'products' ? setProductForm(item) : setPlanForm(item); }} className="p-4 bg-white border border-slate-100 rounded-2xl hover:bg-blue-50 hover:text-blue-600 transition-all active:scale-90"><Edit2 className="w-5 h-5" /></button>
+                                        <button onClick={() => view === 'products' ? deleteProduct(item.id) : deletePlan(item.id)} className="p-4 bg-white border border-slate-100 rounded-2xl hover:bg-red-50 hover:text-red-600 transition-all active:scale-90"><Trash2 className="w-5 h-5" /></button>
                                     </div>
                                 </div>
                             ))}
                          </div>
                      </div>
 
-                     <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 h-fit">
-                         <h3 className="font-black text-xl mb-8 uppercase tracking-tighter">{editMode ? 'Modify' : 'Create'} {view === 'products' ? 'Product' : 'Plan'}</h3>
+                     <div className="bg-white p-10 rounded-[3rem] shadow-2xl border border-slate-100 h-fit sticky top-10">
+                         <h3 className="font-black text-2xl mb-10 uppercase tracking-tighter">{editMode ? 'Modify Entry' : 'Create Entry'}</h3>
                          {view === 'products' ? (
-                            <div className="space-y-5">
-                                <div className="border-4 border-dashed border-slate-100 p-8 rounded-3xl text-center relative hover:bg-slate-50 transition-all cursor-pointer group overflow-hidden">
-                                    {productForm.image ? <img src={productForm.image} className="h-32 mx-auto object-contain drop-shadow-lg" alt="Upload" /> : <div className="text-slate-400 py-4"><Upload className="mx-auto mb-3 w-8 h-8 opacity-20" /> <span className="text-[10px] font-black uppercase tracking-widest">Select Visual</span></div>}
+                            <div className="space-y-6">
+                                <div className="border-4 border-dashed border-slate-100 p-10 rounded-[2.5rem] text-center relative hover:bg-slate-50 transition-all cursor-pointer group overflow-hidden">
+                                    {productForm.image ? <img src={productForm.image} className="h-40 mx-auto object-contain drop-shadow-2xl" alt="Upload" /> : <div className="text-slate-400 py-6"><Upload className="mx-auto mb-4 w-10 h-10 opacity-30" /> <span className="text-[10px] font-black uppercase tracking-[0.2em]">Select Visual Asset</span></div>}
                                     <input type="file" title="image" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
                                 </div>
                                 
                                 <div>
-                                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Category Type</label>
-                                    <select className="border-2 border-slate-50 p-4 w-full rounded-2xl bg-white font-black text-xs uppercase" value={productForm.category || 'device'} onChange={e => setProductForm({...productForm, category: e.target.value as any})}>
-                                        <option value="device">Standalone Device</option>
-                                        <option value="sim">Data SIM Component</option>
-                                        <option value="package">Full Package Suite</option>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">Category Designation</label>
+                                    <select className="border-2 border-slate-50 p-5 w-full rounded-2xl bg-white font-black text-xs uppercase" value={productForm.category || 'device'} onChange={e => setProductForm({...productForm, category: e.target.value as any})}>
+                                        <option value="device">Standalone Hardware</option>
+                                        <option value="sim">Network Data SIM</option>
+                                        <option value="package">Full Solution Suite</option>
                                     </select>
                                 </div>
 
-                                <input className="border-2 border-slate-50 p-4 w-full rounded-2xl outline-none focus:border-slate-900 transition-all text-sm font-medium" placeholder="Label" value={productForm.name} onChange={e => setProductForm({...productForm, name: e.target.value})} />
-                                <textarea className="border-2 border-slate-50 p-4 w-full rounded-2xl outline-none focus:border-slate-900 transition-all text-sm font-medium h-24" placeholder="Smart Marketing Copy..." value={productForm.description} onChange={e => setProductForm({...productForm, description: e.target.value})} />
-                                <input className="border-2 border-slate-50 p-4 w-full rounded-2xl outline-none focus:border-slate-900 transition-all text-sm font-black" type="number" placeholder="Price (NGN)" value={productForm.price || ''} onChange={e => setProductForm({...productForm, price: Number(e.target.value)})} />
-                                <button onClick={saveProduct} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all">{loading ? <Loader2 className="animate-spin mx-auto" /> : 'Sync Inventory'}</button>
+                                <input className="border-2 border-slate-50 p-5 w-full rounded-2xl outline-none focus:border-slate-900 transition-all text-sm font-black uppercase tracking-tight" placeholder="Product Identifier" value={productForm.name} onChange={e => setProductForm({...productForm, name: e.target.value})} />
+                                <textarea className="border-2 border-slate-50 p-5 w-full rounded-2xl outline-none focus:border-slate-900 transition-all text-sm font-medium h-28" placeholder="Marketing Copy (Features & Specs)" value={productForm.description} onChange={e => setProductForm({...productForm, description: e.target.value})} />
+                                <input className="border-2 border-slate-50 p-5 w-full rounded-2xl outline-none focus:border-slate-900 transition-all text-sm font-black" type="number" placeholder="Retail Price (NGN)" value={productForm.price || ''} onChange={e => setProductForm({...productForm, price: Number(e.target.value)})} />
+                                <button onClick={saveProduct} className="w-full bg-slate-900 text-white p-6 rounded-[1.5rem] font-black uppercase tracking-widest shadow-2xl active:scale-95 transition-all">{loading ? <Loader2 className="animate-spin mx-auto" /> : 'Synchronize Inventory'}</button>
                             </div>
                          ) : (
-                            <div className="space-y-5">
+                            <div className="space-y-6">
                                 <div>
-                                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Carrier Provider</label>
-                                    <select className="border-2 border-slate-50 p-4 w-full rounded-2xl bg-white font-black text-xs uppercase" value={planForm.network} onChange={e => setPlanForm({...planForm, network: e.target.value as any})}>
-                                        <option value="MTN">MTN</option><option value="AIRTEL">AIRTEL</option><option value="GLO">GLO</option>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">Carrier Provider</label>
+                                    <select className="border-2 border-slate-50 p-5 w-full rounded-2xl bg-white font-black text-xs uppercase" value={planForm.network} onChange={e => setPlanForm({...planForm, network: e.target.value as any})}>
+                                        <option value="MTN">MTN NIGERIA</option><option value="AIRTEL">AIRTEL NIGERIA</option><option value="GLO">GLO WORLD</option>
                                     </select>
                                 </div>
-                                <input className="border-2 border-slate-50 p-4 w-full rounded-2xl text-sm font-black uppercase" placeholder="Data Volume (e.g. 50GB)" value={planForm.data} onChange={e => setPlanForm({...planForm, data: e.target.value})} />
-                                <input className="border-2 border-slate-50 p-4 w-full rounded-2xl text-sm font-medium uppercase" placeholder="Validity Period" value={planForm.validity} onChange={e => setPlanForm({...planForm, validity: e.target.value})} />
-                                <input className="border-2 border-slate-50 p-4 w-full rounded-2xl text-sm font-black" type="number" placeholder="Retail Price" value={planForm.price || ''} onChange={e => setPlanForm({...planForm, price: Number(e.target.value)})} />
-                                <input className="border-2 border-slate-50 p-4 w-full rounded-2xl text-[10px] font-mono" type="number" placeholder="Amigo Plan ID" value={planForm.planId || ''} onChange={e => setPlanForm({...planForm, planId: Number(e.target.value)})} />
-                                <button onClick={savePlan} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all">{loading ? <Loader2 className="animate-spin mx-auto" /> : 'Sync Data Plan'}</button>
+                                <input className="border-2 border-slate-50 p-5 w-full rounded-2xl text-sm font-black uppercase" placeholder="Data Payload (e.g. 100GB)" value={planForm.data} onChange={e => setPlanForm({...planForm, data: e.target.value})} />
+                                <input className="border-2 border-slate-50 p-5 w-full rounded-2xl text-sm font-medium uppercase" placeholder="Validity Timeline" value={planForm.validity} onChange={e => setPlanForm({...planForm, validity: e.target.value})} />
+                                <input className="border-2 border-slate-50 p-5 w-full rounded-2xl text-sm font-black" type="number" placeholder="Retail Price (NGN)" value={planForm.price || ''} onChange={e => setPlanForm({...planForm, price: Number(e.target.value)})} />
+                                <input className="border-2 border-slate-50 p-5 w-full rounded-2xl text-[11px] font-mono" type="number" placeholder="Tunnel Plan ID" value={planForm.planId || ''} onChange={e => setPlanForm({...planForm, planId: Number(e.target.value)})} />
+                                <button onClick={savePlan} className="w-full bg-slate-900 text-white p-6 rounded-[1.5rem] font-black uppercase tracking-widest shadow-2xl active:scale-95 transition-all">{loading ? <Loader2 className="animate-spin mx-auto" /> : 'Synchronize Plan'}</button>
                             </div>
                          )}
                      </div>
@@ -498,79 +531,89 @@ export default function AdminPage() {
             )}
 
             {view === 'manual' && (
-                <div className="max-w-2xl mx-auto bg-white p-12 rounded-[2.5rem] border border-slate-100 shadow-2xl">
-                    <div className="text-center mb-10">
-                        <div className="w-20 h-20 bg-blue-600 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-xl text-white"><Send className="w-8 h-8" /></div>
-                        <h3 className="text-2xl font-black text-slate-900 tracking-tight uppercase">Provisioning Engine</h3>
-                        <p className="text-slate-500 text-xs font-medium mt-2">Force-push data bundles via Amigo direct tunnel.</p>
+                <div className="max-w-2xl mx-auto bg-white p-16 rounded-[4rem] border border-slate-100 shadow-2xl mt-10">
+                    <div className="text-center mb-12">
+                        <div className="w-24 h-24 bg-blue-600 rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 shadow-xl text-white"><Send className="w-10 h-10" /></div>
+                        <h3 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">Direct Tunnel Injection</h3>
+                        <p className="text-slate-500 text-sm font-black mt-3 uppercase tracking-widest opacity-60">Push data payloads via Amigo Direct tunnel.</p>
                     </div>
-                    <div className="space-y-6">
-                        <input className="w-full p-5 rounded-2xl bg-slate-50 border-2 border-slate-100 outline-none focus:border-blue-600 transition-all font-mono text-xl" placeholder="Recipient: 080..." value={manualForm.phone} onChange={e => setManualForm({...manualForm, phone: e.target.value})} />
-                        <select className="w-full p-5 rounded-2xl bg-slate-50 border-2 border-slate-100 outline-none focus:border-blue-600 transition-all font-black text-sm uppercase" value={manualForm.planId} onChange={e => setManualForm({...manualForm, planId: e.target.value})}>
-                            <option value="">Choose Payload...</option>
+                    <div className="space-y-8">
+                        <input className="w-full p-6 rounded-3xl bg-slate-50 border-2 border-slate-100 outline-none focus:border-blue-600 transition-all font-mono text-2xl tracking-widest text-center" placeholder="080XXXXXXXX" value={manualForm.phone} onChange={e => setManualForm({...manualForm, phone: e.target.value})} />
+                        <select className="w-full p-6 rounded-3xl bg-slate-50 border-2 border-slate-100 outline-none focus:border-blue-600 transition-all font-black text-sm uppercase text-center" value={manualForm.planId} onChange={e => setManualForm({...manualForm, planId: e.target.value})}>
+                            <option value="">Select Payload Bundle...</option>
                             {plans.map(p => <option key={p.id} value={p.id}>{p.network} {p.data} ({formatCurrency(p.price)})</option>)}
                         </select>
-                        <button onClick={handleManualTopup} disabled={loading} className="w-full p-6 bg-slate-900 text-white rounded-[1.5rem] font-black uppercase tracking-widest shadow-2xl hover:bg-slate-800 transition active:scale-95">
-                            {loading ? <Loader2 className="animate-spin mx-auto" /> : 'Execute Payload'}
+                        <button onClick={handleManualTopup} disabled={loading} className="w-full p-8 bg-slate-900 text-white rounded-[2.5rem] font-black uppercase tracking-[0.2em] shadow-2xl hover:bg-slate-800 transition active:scale-95">
+                            {loading ? <Loader2 className="animate-spin mx-auto" /> : 'Execute Injection'}
                         </button>
                     </div>
                 </div>
             )}
 
             {view === 'broadcast' && (
-                <div className="max-w-2xl mx-auto bg-white p-12 rounded-[2.5rem] border border-slate-100 shadow-2xl">
-                    <div className="text-center mb-10">
-                        <div className="w-20 h-20 bg-orange-500 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-xl text-white"><Megaphone className="w-8 h-8" /></div>
-                        <h3 className="text-2xl font-black text-slate-900 tracking-tight uppercase">App Broadcast</h3>
-                        <p className="text-slate-500 text-xs font-medium mt-2">Update the scrolling ticker message on user dashboards.</p>
+                <div className="max-w-2xl mx-auto bg-white p-16 rounded-[4rem] border border-slate-100 shadow-2xl mt-10">
+                    <div className="text-center mb-12">
+                        <div className="w-24 h-24 bg-orange-500 rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 shadow-xl text-white"><Megaphone className="w-10 h-10" /></div>
+                        <h3 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">Ticker Update</h3>
+                        <p className="text-slate-500 text-sm font-black mt-3 uppercase tracking-widest opacity-60">Update global moving broadcast for all users.</p>
                     </div>
-                    <div className="space-y-6">
-                        <textarea className="w-full p-5 rounded-2xl bg-slate-50 border-2 border-slate-100 outline-none focus:border-orange-500 transition-all font-medium text-sm min-h-[120px]" placeholder="Broadcast content..." value={broadcastForm.content} onChange={e => setBroadcastForm({...broadcastForm, content: e.target.value})} />
-                        <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-8">
+                        <textarea className="w-full p-8 rounded-3xl bg-slate-50 border-2 border-slate-100 outline-none focus:border-orange-500 transition-all font-black text-sm min-h-[160px] uppercase leading-relaxed" placeholder="Type your broadcast message here..." value={broadcastForm.content} onChange={e => setBroadcastForm({...broadcastForm, content: e.target.value})} />
+                        <div className="grid grid-cols-3 gap-4">
                             {['info', 'warning', 'alert'].map(type => (
-                                <button key={type} onClick={() => setBroadcastForm({...broadcastForm, type})} className={cn("p-4 rounded-xl border-2 font-black text-[10px] uppercase", broadcastForm.type === type ? 'border-orange-500 bg-orange-500 text-white' : 'border-slate-100 bg-slate-50 text-slate-500')}>
+                                <button key={type} onClick={() => setBroadcastForm({...broadcastForm, type})} className={cn("p-6 rounded-2xl border-2 font-black text-[11px] uppercase tracking-widest transition-all", broadcastForm.type === type ? 'border-orange-500 bg-orange-500 text-white shadow-xl shadow-orange-100' : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200')}>
                                     {type}
                                 </button>
                             ))}
                         </div>
-                        <button onClick={handleBroadcast} disabled={loading} className="w-full p-6 bg-slate-900 text-white rounded-[1.5rem] font-black uppercase tracking-widest shadow-2xl active:scale-95">
-                            {loading ? <Loader2 className="animate-spin mx-auto" /> : 'Update Dashboard'}
+                        <button onClick={handleBroadcast} disabled={loading} className="w-full p-8 bg-slate-900 text-white rounded-[2.5rem] font-black uppercase tracking-[0.2em] shadow-2xl active:scale-95 transition-all">
+                            {loading ? <Loader2 className="animate-spin mx-auto" /> : 'Deploy Ticker Update'}
                         </button>
                     </div>
                 </div>
             )}
 
             {(view === 'console' || view === 'flw_console') && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-[calc(100vh-200px)]">
-                    <div className="flex flex-col gap-6">
-                        <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm flex-1">
-                            <h3 className="font-black text-lg mb-6 uppercase tracking-tight flex items-center gap-3">
-                                <Terminal className="w-5 h-5 text-blue-600" /> API Console
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 h-[calc(100vh-220px)]">
+                    <div className="flex flex-col gap-8">
+                        <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm flex-1 flex flex-col">
+                            <h3 className="font-black text-xl mb-10 uppercase tracking-tighter flex items-center gap-4">
+                                <Terminal className="w-6 h-6 text-blue-600" /> Endpoint Terminal
                             </h3>
-                            <div className="space-y-4">
+                            <div className="space-y-6 flex-1 flex flex-col">
                                 {view === 'flw_console' && (
-                                    <select className="w-full p-4 rounded-xl bg-slate-50 border border-slate-100 font-black text-xs" value={flwMethod} onChange={e => setFlwMethod(e.target.value)}>
-                                        <option value="GET">GET</option><option value="POST">POST</option>
+                                    <select className="w-full p-5 rounded-2xl bg-slate-50 border border-slate-100 font-black text-xs uppercase" value={flwMethod} onChange={e => setFlwMethod(e.target.value)}>
+                                        <option value="GET">GET REQUEST</option><option value="POST">POST REQUEST</option>
                                     </select>
                                 )}
-                                <input className="w-full p-4 rounded-xl bg-slate-50 border border-slate-100 font-mono text-xs" value={view === 'console' ? consoleEndpoint : flwEndpoint} onChange={e => view === 'console' ? setConsoleEndpoint(e.target.value) : setFlwEndpoint(e.target.value)} />
-                                <textarea className="w-full h-64 p-5 rounded-2xl bg-slate-900 text-blue-400 font-mono text-xs outline-none" value={view === 'console' ? consolePayload : flwPayload} onChange={e => view === 'console' ? setConsolePayload(e.target.value) : setFlwPayload(e.target.value)} />
-                                <button onClick={view === 'console' ? sendConsoleRequest : sendFlwRequest} className="w-full p-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest shadow-xl flex items-center justify-center gap-3">
-                                    {loading ? <Loader2 className="animate-spin w-5 h-5" /> : <Play className="w-4 h-4" />} Fire Request
+                                <input className="w-full p-5 rounded-2xl bg-slate-50 border border-slate-100 font-mono text-xs" value={view === 'console' ? consoleEndpoint : flwEndpoint} onChange={e => view === 'console' ? setConsoleEndpoint(e.target.value) : setFlwEndpoint(e.target.value)} />
+                                <textarea className="w-full flex-1 p-6 rounded-[1.5rem] bg-slate-900 text-blue-400 font-mono text-xs outline-none shadow-inner" value={view === 'console' ? consolePayload : flwPayload} onChange={e => view === 'console' ? setConsolePayload(e.target.value) : setFlwPayload(e.target.value)} />
+                                <button onClick={view === 'console' ? sendConsoleRequest : sendFlwRequest} className="w-full p-6 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-[0.2em] shadow-2xl flex items-center justify-center gap-4 active:scale-95 transition-all">
+                                    {loading ? <Loader2 className="animate-spin w-6 h-6" /> : <Play className="w-5 h-5 fill-current" />} Execute API Call
                                 </button>
                             </div>
                         </div>
                     </div>
-                    <div className="bg-slate-900 rounded-[2rem] p-8 flex flex-col relative overflow-hidden shadow-2xl">
-                        <h3 className="text-white font-black text-lg mb-6 uppercase tracking-tight relative z-10 flex items-center gap-3">
-                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div> Response Output
+                    <div className="bg-slate-900 rounded-[3rem] p-10 flex flex-col relative overflow-hidden shadow-2xl">
+                        <h3 className="text-white font-black text-xl mb-10 uppercase tracking-tighter relative z-10 flex items-center gap-4">
+                            <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse shadow-[0_0_15px_rgba(34,197,94,0.6)]"></div> Server Response
                         </h3>
-                        <div className="flex-1 overflow-y-auto space-y-4 no-scrollbar relative z-10 font-mono text-xs">
+                        <div className="flex-1 overflow-y-auto space-y-6 no-scrollbar relative z-10 font-mono text-xs">
                             {(view === 'console' ? consoleHistory : flwHistory).map((h, i) => (
-                                <div key={i} className={cn("p-4 rounded-2xl border", h.type === 'req' ? 'bg-slate-800 text-blue-300 border-slate-700' : 'bg-slate-950 text-green-400 border-slate-800')}>
-                                    <pre className="whitespace-pre-wrap">{JSON.stringify(h.data, null, 2)}</pre>
+                                <div key={i} className={cn("p-6 rounded-[1.5rem] border animate-in slide-in-from-bottom-2", h.type === 'req' ? 'bg-slate-800/50 text-blue-300 border-slate-700' : 'bg-slate-950/80 text-green-400 border-slate-800 shadow-2xl')}>
+                                    <div className="flex justify-between items-center mb-4 text-[9px] font-black uppercase opacity-40">
+                                        <span>{h.type === 'req' ? 'Sent Request' : 'Received Response'}</span>
+                                        <span>{h.time}</span>
+                                    </div>
+                                    <pre className="whitespace-pre-wrap leading-relaxed">{JSON.stringify(h.data, null, 2)}</pre>
                                 </div>
                             ))}
+                            {(view === 'console' ? consoleHistory : flwHistory).length === 0 && (
+                                <div className="flex-1 flex flex-col items-center justify-center text-slate-700 py-40">
+                                    <Activity className="w-12 h-12 mb-4 opacity-10" />
+                                    <p className="text-[10px] font-black uppercase tracking-[0.3em]">Awaiting Interaction...</p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

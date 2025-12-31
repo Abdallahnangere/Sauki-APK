@@ -1,4 +1,3 @@
-
 import { NextResponse } from 'next/server';
 import { prisma } from '../../../../lib/prisma';
 import axios from 'axios';
@@ -9,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { productId, phone, name, state, simId } = body; // Added simId (optional)
+    const { productId, phone, name, state, simId } = body;
 
     if (!process.env.FLUTTERWAVE_SECRET_KEY) {
         return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
@@ -19,21 +18,21 @@ export async function POST(req: Request) {
     if (!product) return NextResponse.json({ error: 'Product not found' }, { status: 404 });
 
     let totalAmount = product.price;
-    let narration = `Product: ${product.name}`;
-    let simProduct = null;
-
-    // Logic for Cross-Selling (Adding SIM to Device)
+    let items = [{ name: product.name, price: product.price }];
+    let narration = `Order: ${product.name}`;
+    
+    // Support for multiple item details in the description
     if (simId) {
-        simProduct = await prisma.product.findUnique({ where: { id: simId } });
+        const simProduct = await prisma.product.findUnique({ where: { id: simId } });
         if (simProduct) {
             totalAmount += simProduct.price;
-            narration += ` + SIM: ${simProduct.name}`;
+            items.push({ name: simProduct.name, price: simProduct.price });
+            narration += ` + ${simProduct.name}`;
         }
     }
 
+    const fullManifest = items.map(i => i.name).join(", ");
     const tx_ref = `SAUKI-COMM-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-
-    console.log(`[Ecomm Init] Charges Flow for ${name} - Total: ${totalAmount}`);
 
     const flwPayload = {
       tx_ref: tx_ref,
@@ -42,10 +41,11 @@ export async function POST(req: Request) {
       phone_number: phone,
       currency: "NGN",
       fullname: name,
-      narration: narration,
+      narration: `SAUKI Order: ${fullManifest}`,
       meta: {
-        consumer_state: state,
-        included_sim_id: simId || null
+        customer_name: name,
+        delivery_address: state,
+        items: items
       },
       is_permanent: false
     };
@@ -65,7 +65,6 @@ export async function POST(req: Request) {
         const responseBody = flwResponse.data;
 
         if (responseBody.status !== 'success') {
-          console.error('[Flutterwave Error]', responseBody);
           throw new Error(responseBody.message || 'Payment initialization failed');
         }
 
@@ -73,9 +72,10 @@ export async function POST(req: Request) {
         const bankInfo = metaObj?.authorization;
 
         if (!bankInfo || !bankInfo.transfer_bank || !bankInfo.transfer_account) {
-            throw new Error('Payment gateway did not return bank account details.');
+            throw new Error('Gateway error: Missing bank details.');
         }
 
+        // Store full manifest in deliveryData for admin visibility
         await prisma.transaction.create({
           data: {
             tx_ref,
@@ -88,6 +88,12 @@ export async function POST(req: Request) {
             deliveryState: state,
             idempotencyKey: uuidv4(),
             paymentData: responseBody,
+            deliveryData: {
+                manifest: fullManifest,
+                items: items,
+                address: state,
+                initiatedAt: new Date().toISOString()
+            }
           }
         });
 
@@ -102,15 +108,10 @@ export async function POST(req: Request) {
 
     } catch (flwError: any) {
         const msg = flwError.response?.data?.message || flwError.message;
-        console.error('[Flutterwave API Exception]', msg);
-        return NextResponse.json({ 
-            error: 'Payment Gateway Error', 
-            details: msg 
-        }, { status: 502 });
+        return NextResponse.json({ error: 'Gateway Error', details: msg }, { status: 502 });
     }
 
   } catch (error: any) {
-    console.error('Payment Init Error:', error);
-    return NextResponse.json({ error: error.message || 'Payment initiation failed' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Initiation failed' }, { status: 500 });
   }
 }
