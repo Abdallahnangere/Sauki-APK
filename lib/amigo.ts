@@ -32,12 +32,20 @@ export const amigoClient = axios.create({
 });
 
 /**
+ * NETWORK MAPPING (Crosscheck Verification)
+ * This object maps the string values from your DB/UI ('MTN', 'AIRTEL')
+ * to the specific integer IDs required by the Amigo API.
+ */
+export const AMIGO_NETWORKS: Record<string, number> = {
+  'MTN': 1,      // User selects MTN -> Sends 1
+  'GLO': 2,      // User selects GLO -> Sends 2
+  'AIRTEL': 3,   // User selects AIRTEL -> Sends 3
+  '9MOBILE': 4
+};
+
+/**
  * Helper to call Amigo endpoints.
  * Routes traffic through the configured AWS Proxy.
- * * UPDATED SIGNATURE:
- * 1. payload (Object) - The data to send
- * 2. idempotencyKey (String, Optional) - Unique key for the transaction
- * 3. endpoint (String, Optional) - Specific path (e.g., '/data'), defaults to empty
  */
 export async function callAmigoAPI(payload: any, idempotencyKey?: string, endpoint: string = '') {
   // 1. Sanitize Base URL (Remove trailing slash)
@@ -81,10 +89,3 @@ export async function callAmigoAPI(payload: any, idempotencyKey?: string, endpoi
     };
   }
 }
-
-export const AMIGO_NETWORKS: Record<string, number> = {
-  'MTN': 1,
-  'GLO': 2,
-  'AIRTEL': 3,
-  '9MOBILE': 4
-};
