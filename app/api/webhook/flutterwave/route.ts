@@ -48,31 +48,17 @@ export async function POST(req: Request) {
          const plan = await prisma.dataPlan.findUnique({ where: { id: transaction.planId } });
          
          if (plan) {
-             // 1. NORMALIZE: Trim spaces and force uppercase
-             const cleanNetwork = plan.network ? plan.network.trim().toUpperCase() : '';
+             const networkId = AMIGO_NETWORKS[plan.network];
              
-             // 2. LOOKUP
-             const networkId = AMIGO_NETWORKS[cleanNetwork];
-
-             console.log(`[Webhook] Processing: ${transaction.phone} | Network: ${cleanNetwork} -> ID: ${networkId}`);
-
-             // 3. SAFETY CHECK
-             if (!networkId) {
-                 console.error(`[Webhook] ❌ ABORTING: Invalid Network ID for '${cleanNetwork}'`);
-                 return NextResponse.json({ error: 'Invalid Network Mapping' }, { status: 400 });
-             }
-             
-             // 4. CONSTRUCT PAYLOAD
+             // Strict Payload Structure per user instructions
              const amigoPayload = {
-                 network: networkId, 
+                 network: networkId,
                  mobile_number: transaction.phone,
                  plan: Number(plan.planId),
                  Ported_number: true
              };
 
-             // 5. CALL API
-             // Uses the harmonized 2-argument signature
-             const amigoRes = await callAmigoAPI(amigoPayload, reference);
+             const amigoRes = await callAmigoAPI('/data/', amigoPayload, reference);
              
              const isSuccess = amigoRes.success && (
                 amigoRes.data.success === true || 
@@ -86,7 +72,7 @@ export async function POST(req: Request) {
                      where: { id: transaction.id },
                      data: { 
                          status: 'delivered', 
-                         deliveryData: amigoRes.data
+                         deliveryData: amigoRes.data 
                      }
                  });
              }

@@ -48,15 +48,16 @@ export async function POST(req: Request) {
         if (plan) {
             const networkId = AMIGO_NETWORKS[plan.network];
             
-            // Strict Payload Structure
+            // Strict Payload Structure per user instructions
             const amigoPayload = {
-                network: networkId,
+                network: networkId, // e.g., 1 for MTN
                 mobile_number: transaction.phone,
-                plan: Number(plan.planId), // Mapped Amigo ID
+                plan: Number(plan.planId), // The Amigo ID from Database
                 Ported_number: true
             };
 
-            const amigoRes = await callAmigoAPI(amigoPayload, tx_ref);
+            // Call Amigo (Endpoint arg ignored by updated logic to use Env Var)
+            const amigoRes = await callAmigoAPI('/data/', amigoPayload, tx_ref);
 
             const isSuccess = amigoRes.success && (
                 amigoRes.data.success === true || 
