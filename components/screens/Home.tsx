@@ -64,7 +64,7 @@ export const Home: React.FC<HomeProps> = ({ onNavigate }) => {
                     <motion.div 
                         initial={{ x: "100%" }}
                         animate={{ x: "-100%" }}
-                        transition={{ repeat: Infinity, duration: 18, ease: "linear" }}
+                        transition={{ repeat: Infinity, duration: 22, ease: "linear" }}
                         className="whitespace-nowrap font-black uppercase text-[10px] tracking-tight pl-4"
                     >
                         {systemMessage.content} • {systemMessage.content} • {systemMessage.content}
@@ -125,9 +125,9 @@ export const Home: React.FC<HomeProps> = ({ onNavigate }) => {
             </div>
           </div>
 
-          {/* Elevated Trust Footer - Centered perfectly between cards and sheet */}
+          {/* Centered Trust Footer - Images above text */}
           <div className="flex-1 flex flex-col justify-center items-center py-2">
-            <div className="flex flex-col items-center gap-6">
+            <div className="flex flex-col items-center gap-4">
                 <div className="flex items-center justify-center gap-12">
                     <img src="/smedan.png" alt="SMEDAN" className="h-10 w-auto object-contain grayscale opacity-40 hover:grayscale-0 hover:opacity-100 transition-all duration-500" />
                     <img src="/coat.png" alt="Nigeria" className="h-10 w-auto object-contain grayscale opacity-40 hover:grayscale-0 hover:opacity-100 transition-all duration-500" />
