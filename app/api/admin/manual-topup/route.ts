@@ -15,20 +15,29 @@ export async function POST(req: Request) {
         const plan = await prisma.dataPlan.findUnique({ where: { id: planId } });
         if (!plan) return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
 
-        const networkId = AMIGO_NETWORKS[plan.network];
-        const idempotencyKey = `MANUAL-${uuidv4()}`;
+        // 1. Prepare Variables
+        // Ensure the network key exists in your mapping (case-insensitive safe)
+        const networkKey = plan.network.trim().toUpperCase();
+        const networkId = AMIGO_NETWORKS[networkKey];
         
-        // Strict Payload Structure
+        if (!networkId) {
+             return NextResponse.json({ error: `Invalid Network: ${plan.network}` }, { status: 400 });
+        }
+
+        // 2. DEFINE tx_ref HERE so it can be used everywhere
+        const tx_ref = `MANUAL-${uuidv4()}`;
+        
         const amigoPayload = {
             network: networkId,
             mobile_number: phone,
-            plan: Number(plan.planId), // Mapped Amigo ID
+            plan: Number(plan.planId),
             Ported_number: true
         };
 
         console.log(`[Manual Topup] Sending to Amigo:`, JSON.stringify(amigoPayload));
 
-        const amigoRes = await callAmigoAPI(amigoPayload);
+        // 3. Call API (Pass tx_ref as idempotency key for tracking)
+        const amigoRes = await callAmigoAPI(amigoPayload, tx_ref);
 
         const isSuccess = amigoRes.success && (
             amigoRes.data.success === true || 
@@ -37,21 +46,27 @@ export async function POST(req: Request) {
             amigoRes.data.status === 'successful'
         );
         
+        // 4. Save Transaction (Now tx_ref is defined)
         const transaction = await prisma.transaction.create({
             data: {
-                tx_ref: tx_ref,
+                tx_ref: tx_ref, // ✅ No longer undefined
                 type: 'data',
                 status: isSuccess ? 'delivered' : 'failed',
                 phone,
                 amount: 0, 
                 planId: plan.id,
-                deliveryData: amigoRes.data,
+                deliveryData: amigoRes.data, // Stores the full API response
                 paymentData: { method: 'Manual Admin Topup' }
             }
         });
 
         if (!isSuccess) {
-            return NextResponse.json({ error: 'Tunnel Delivery Failed', details: amigoRes.data }, { status: 400 });
+            // Return 400 but include the transaction data so you know it failed
+            return NextResponse.json({ 
+                error: 'Tunnel Delivery Failed', 
+                details: amigoRes.data,
+                transactionId: transaction.id 
+            }, { status: 400 });
         }
 
         return NextResponse.json({ success: true, transaction });
