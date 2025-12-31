@@ -59,7 +59,7 @@ export async function POST(req: Request) {
             };
 
             // FIX: Updated to match new lib.ts signature: (payload, key, endpoint)
-            const amigoRes = await callAmigoAPI(amigoPayload, tx_ref, '/data/');
+            const amigoRes = await callAmigoAPI(amigoPayload, tx_ref, '');
 
             const isSuccess = amigoRes.success && (
                 amigoRes.data.success === true || 
