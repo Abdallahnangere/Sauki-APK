@@ -2,6 +2,7 @@ import axios from 'axios';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 
 // CONFIGURATION
+// Ensure this ENV var includes the full path (e.g., https://amigo.ng/api/data)
 const AMIGO_BASE = process.env.AMIGO_BASE_URL || 'https://amigo.ng/api'; 
 const PROXY_URL = process.env.AWS_PROXY_URL; 
 const API_KEY = process.env.AMIGO_API_KEY || '';
@@ -30,30 +31,29 @@ export const amigoClient = axios.create({
 });
 
 /**
- * Helper to call Amigo endpoints.
- * Automatically handles URL construction to prevent duplication.
+ * UPDATED MAPPING (Harmonized)
+ * MTN=1, GLO=2, AIRTEL=4, 9MOBILE=9
  */
-export async function callAmigoAPI(endpoint: string, payload: any, idempotencyKey?: string) {
-  // Normalize Base URL (remove trailing slash)
-  let baseUrl = AMIGO_BASE.replace(/\/$/, '');
-  
-  // Normalize Endpoint (ensure leading slash)
-  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+export const AMIGO_NETWORKS: Record<string, number> = {
+  'MTN': 1,
+  'GLO': 2,
+  'AIRTEL': 4,  // Corrected from 3
+  '9MOBILE': 9, // Corrected from 4
+  'ETISALAT': 9
+};
 
+/**
+ * Helper to call Amigo endpoints.
+ * Signature: (payload, idempotencyKey) - Matches route.ts
+ */
+export async function callAmigoAPI(payload: any, idempotencyKey?: string) {
   // INTELLIGENT URL CONSTRUCTION
-  // If base URL already ends with the first part of the endpoint, do not append it again.
-  // Example: Base '.../api/data' and Endpoint '/data/' -> Keep '.../api/data'
-  let fullUrl = `${baseUrl}${cleanEndpoint}`;
-  
-  if (cleanEndpoint === '/data/' || cleanEndpoint === '/data') {
-      if (baseUrl.endsWith('/data')) {
-          fullUrl = baseUrl; // Base already includes the endpoint
-      } else if (baseUrl.endsWith('/data/')) {
-           fullUrl = baseUrl.slice(0, -1); // Remove trailing slash from base
-      }
-  }
+  // Just normalize the Base URL since the endpoint is implied to be in it
+  let fullUrl = AMIGO_BASE.replace(/\/$/, '');
 
   console.log(`[Amigo Tunnel] 🚀 Requesting: ${fullUrl}`);
+  // Added Payload log so you can debug the exact JSON being sent
+  console.log(`[Amigo Tunnel] 📦 Payload:`, JSON.stringify(payload, null, 2));
 
   try {
     const headers: Record<string, string> = {};
@@ -74,6 +74,11 @@ export async function callAmigoAPI(endpoint: string, payload: any, idempotencyKe
     const errorMsg = error.response?.data?.message || error.message;
     console.error(`[Amigo Tunnel] ❌ Failed: ${errorMsg}`);
     
+    // Dump full error response if available for better debugging
+    if (error.response?.data) {
+        console.error(`[Amigo Tunnel] 🔍 API Response Dump:`, JSON.stringify(error.response.data));
+    }
+    
     return {
       success: false,
       data: error.response?.data || { error: errorMsg },
@@ -81,10 +86,3 @@ export async function callAmigoAPI(endpoint: string, payload: any, idempotencyKe
     };
   }
 }
-
-export const AMIGO_NETWORKS: Record<string, number> = {
-  'MTN': 1,
-  'GLO': 2,
-  'AIRTEL': 3,
-  '9MOBILE': 4
-};
