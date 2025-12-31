@@ -48,17 +48,31 @@ export async function POST(req: Request) {
          const plan = await prisma.dataPlan.findUnique({ where: { id: transaction.planId } });
          
          if (plan) {
-             const networkId = AMIGO_NETWORKS[plan.network];
+             // 1. NORMALIZE: Trim spaces and force uppercase
+             const cleanNetwork = plan.network ? plan.network.trim().toUpperCase() : '';
              
-             // Strict Payload Structure
+             // 2. LOOKUP
+             const networkId = AMIGO_NETWORKS[cleanNetwork];
+
+             console.log(`[Webhook] Processing: ${transaction.phone} | Network: ${cleanNetwork} -> ID: ${networkId}`);
+
+             // 3. SAFETY CHECK
+             if (!networkId) {
+                 console.error(`[Webhook] ❌ ABORTING: Invalid Network ID for '${cleanNetwork}'`);
+                 return NextResponse.json({ error: 'Invalid Network Mapping' }, { status: 400 });
+             }
+             
+             // 4. CONSTRUCT PAYLOAD
              const amigoPayload = {
-                 network: networkId,
+                 network: networkId, 
                  mobile_number: transaction.phone,
-                 plan: Number(plan.planId), // Mapped Amigo ID
+                 plan: Number(plan.planId),
                  Ported_number: true
              };
 
-             const amigoRes = await callAmigoAPI('/data/', amigoPayload, reference);
+             // 5. CALL API
+             // Uses the harmonized 2-argument signature
+             const amigoRes = await callAmigoAPI(amigoPayload, reference);
              
              const isSuccess = amigoRes.success && (
                 amigoRes.data.success === true || 
@@ -72,7 +86,7 @@ export async function POST(req: Request) {
                      where: { id: transaction.id },
                      data: { 
                          status: 'delivered', 
-                         deliveryData: amigoRes.data 
+                         deliveryData: amigoRes.data
                      }
                  });
              }
