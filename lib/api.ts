@@ -1,3 +1,4 @@
+
 import { Product, DataPlan, Transaction, PaymentInitResponse } from '../types';
 
 const API_BASE = '/api';
@@ -22,7 +23,7 @@ export const api = {
   
   getDataPlans: () => fetcher<DataPlan[]>('/data-plans'),
   
-  initiateEcommercePayment: (data: { productId: string; phone: string; name: string; state: string }) => 
+  initiateEcommercePayment: (data: { productId: string; phone: string; name: string; state: string; simId?: string }) => 
     fetcher<PaymentInitResponse>('/ecommerce/initiate-payment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
