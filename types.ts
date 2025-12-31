@@ -9,7 +9,8 @@ export interface Product {
 
 export interface DataPlan {
   id: string;
-  network: 'MTN' | 'AIRTEL' | 'GLO';
+  // Updated to match AMIGO_NETWORKS in amigo.ts
+  network: 'MTN' | 'AIRTEL' | 'GLO' | '9MOBILE';
   data: string;
   validity: string;
   price: number;
@@ -41,4 +42,5 @@ export interface PaymentInitResponse {
   amount: number;
 }
 
-export type NetworkType = 'MTN' | 'AIRTEL' | 'GLO';
+// Updated to ensure all keys in AMIGO_NETWORKS are covered
+export type NetworkType = 'MTN' | 'AIRTEL' | 'GLO' | '9MOBILE';
