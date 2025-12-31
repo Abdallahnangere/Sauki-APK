@@ -1,3 +1,4 @@
+
 import { NextResponse } from 'next/server';
 import { prisma } from '../../../lib/prisma';
 
@@ -18,7 +19,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { name, description, price, image } = body;
+    const { name, description, price, image, category } = body;
     
     if (!name || !price) return NextResponse.json({ error: 'Name and Price are required' }, { status: 400 });
 
@@ -28,7 +29,8 @@ export async function POST(req: Request) {
         description: description || '',
         price: Number(price),
         image: image || 'https://placehold.co/600x600/png?text=Product',
-        inStock: true
+        inStock: true,
+        category: category || 'device'
       }
     });
     return NextResponse.json(product);
@@ -51,7 +53,8 @@ export async function PUT(req: Request) {
                 name: data.name,
                 description: data.description,
                 price: Number(data.price),
-                image: data.image
+                image: data.image,
+                category: data.category
             }
         });
         return NextResponse.json(product);

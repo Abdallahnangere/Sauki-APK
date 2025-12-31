@@ -1,3 +1,4 @@
+
 import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
@@ -22,14 +23,26 @@ async function main() {
     },
   })
 
-  // 3. Seed Example Product
+  // 3. Seed Example Products
   await prisma.product.create({
     data: {
-      name: 'Test MTN Router',
-      description: 'High speed 5G router with backup battery',
-      price: 25000,
+      name: 'MTN 5G Router Pro',
+      description: 'High speed 5G router with backup battery.',
+      price: 45000,
       image: 'https://placehold.co/400x400/png?text=Router',
       inStock: true,
+      category: 'device' // Default category
+    },
+  })
+
+  await prisma.product.create({
+    data: {
+      name: 'MTN SME Data SIM',
+      description: 'Pre-registered SIM for SME Data.',
+      price: 2000,
+      image: 'https://placehold.co/400x400/png?text=SIM',
+      inStock: true,
+      category: 'sim'
     },
   })
 

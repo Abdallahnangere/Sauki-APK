@@ -1,12 +1,13 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Product, PaymentInitResponse } from '../../types';
 import { api } from '../../lib/api';
-import { formatCurrency } from '../../lib/utils';
+import { formatCurrency, cn } from '../../lib/utils';
 import { BottomSheet } from '../ui/BottomSheet';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
-import { Loader2, CheckCircle2, Copy, Download, RefreshCw, ShoppingBag } from 'lucide-react';
+import { Loader2, CheckCircle2, Copy, Download, RefreshCw, ShoppingBag, Plus, Smartphone, SimCard } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { SharedReceipt } from '../SharedReceipt';
 import { toast } from '../../lib/toast';
@@ -14,8 +15,12 @@ import { toast } from '../../lib/toast';
 export const Store: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [activeTab, setActiveTab] = useState<'device' | 'sim'>('device');
+  
   const [step, setStep] = useState<'details' | 'form' | 'payment' | 'success'>('details');
   const [formData, setFormData] = useState({ name: '', phone: '', state: '' });
+  const [selectedSimId, setSelectedSimId] = useState<string>(''); // For upsell
+  
   const [paymentDetails, setPaymentDetails] = useState<PaymentInitResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isPolling, setIsPolling] = useState(false);
@@ -66,8 +71,10 @@ export const Store: React.FC = () => {
     if (!selectedProduct) return;
     setIsLoading(true);
     try {
+      // Pass the selected upsell SIM ID if any
       const res = await api.initiateEcommercePayment({
         productId: selectedProduct.id,
+        simId: selectedSimId || undefined, 
         ...formData
       });
       setPaymentDetails(res);
@@ -120,19 +127,46 @@ export const Store: React.FC = () => {
     setStep('details');
     setPaymentDetails(null);
     setFormData({ name: '', phone: '', state: '' });
+    setSelectedSimId('');
   };
+
+  // Filter products based on active tab
+  const displayedProducts = products.filter(p => (p.category || 'device') === activeTab);
+  const availableSims = products.filter(p => (p.category === 'sim'));
+  const upsellSim = availableSims.find(s => s.id === selectedSimId);
+
+  // Calculate dynamic total for the button
+  const currentTotal = selectedProduct ? (selectedProduct.price + (upsellSim ? upsellSim.price : 0)) : 0;
 
   return (
     <div className="p-6 pb-32">
-      <h1 className="text-2xl font-bold mb-6 text-slate-900 flex items-center gap-2">
+      <h1 className="text-2xl font-bold mb-4 text-slate-900 flex items-center gap-2">
         <ShoppingBag className="w-6 h-6" /> Premium Store
       </h1>
+
+      {/* Tabs */}
+      <div className="flex p-1 bg-slate-100 rounded-xl mb-6">
+          <button 
+            onClick={() => setActiveTab('device')}
+            className={cn("flex-1 py-2 text-sm font-bold rounded-lg transition-all", activeTab === 'device' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500")}
+          >
+            Data Devices
+          </button>
+          <button 
+            onClick={() => setActiveTab('sim')}
+            className={cn("flex-1 py-2 text-sm font-bold rounded-lg transition-all", activeTab === 'sim' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500")}
+          >
+            Data SIMs
+          </button>
+      </div>
       
       {isLoading && products.length === 0 ? (
           <div className="flex justify-center py-20"><Loader2 className="animate-spin w-8 h-8 text-slate-300" /></div>
       ) : (
         <div className="grid grid-cols-2 gap-4">
-            {products.map((product) => (
+            {displayedProducts.length === 0 ? (
+                <div className="col-span-2 text-center text-slate-400 py-10">No items available.</div>
+            ) : displayedProducts.map((product) => (
             <motion.div
                 key={product.id}
                 whileTap={{ scale: 0.96 }}
@@ -142,8 +176,8 @@ export const Store: React.FC = () => {
                 <div className="aspect-square bg-slate-50 rounded-xl mb-3 relative overflow-hidden flex items-center justify-center p-4">
                     <img src={product.image} alt={product.name} className="object-contain w-full h-full mix-blend-multiply" />
                 </div>
-                <h3 className="font-semibold text-slate-900 text-sm line-clamp-2 min-h-[40px] leading-tight">{product.name}</h3>
-                <div className="mt-3 font-bold text-slate-900">{formatCurrency(product.price)}</div>
+                <h3 className="font-semibold text-slate-900 text-xs line-clamp-2 min-h-[32px] leading-tight mb-1">{product.name}</h3>
+                <div className="font-bold text-slate-900 text-sm">{formatCurrency(product.price)}</div>
             </motion.div>
             ))}
         </div>
@@ -160,26 +194,45 @@ export const Store: React.FC = () => {
                      <p className="text-lg font-medium text-slate-900 mt-1">{selectedProduct.name}</p>
                      <p className="text-slate-500 mt-2 text-sm leading-relaxed">{selectedProduct.description}</p>
                  </div>
-                 <div className="bg-slate-50 p-4 rounded-xl space-y-2 border border-slate-100">
-                     <div className="flex justify-between text-sm">
-                         <span className="text-slate-500">Delivery</span>
-                         <span className="font-medium text-green-600">Free</span>
-                     </div>
-                     <div className="flex justify-between text-sm">
-                         <span className="text-slate-500">Estimated Time</span>
-                         <span className="font-medium text-slate-900">24–48 hours</span>
-                     </div>
-                 </div>
                  <Button onClick={handleBuyNow} className="h-14 text-lg bg-slate-900 text-white shadow-lg shadow-slate-200">Buy Now</Button>
              </div>
          )}
 
-         {step === 'form' && (
+         {step === 'form' && selectedProduct && (
              <div className="space-y-4">
                  <Input label="Full Name" placeholder="Enter your name" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                  <Input label="Phone Number" type="tel" placeholder="080..." value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
                  <Input label="Delivery State" placeholder="e.g. Lagos" value={formData.state} onChange={e => setFormData({...formData, state: e.target.value})} />
-                 <Button onClick={handleFormSubmit} isLoading={isLoading} className="mt-4 h-14 text-lg">Proceed to Payment</Button>
+                 
+                 {/* SIM UPSELL - Only show if buying a Device */}
+                 {(selectedProduct.category === 'device' || !selectedProduct.category) && availableSims.length > 0 && (
+                     <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                         <label className="text-xs font-bold text-blue-800 uppercase tracking-wide mb-2 block flex items-center gap-2">
+                             <Plus className="w-3 h-3" /> Add Data SIM (Optional)
+                         </label>
+                         <select 
+                            className="w-full p-3 rounded-lg border border-blue-200 bg-white text-sm"
+                            value={selectedSimId}
+                            onChange={(e) => setSelectedSimId(e.target.value)}
+                         >
+                             <option value="">No, thanks (Device only)</option>
+                             {availableSims.map(sim => (
+                                 <option key={sim.id} value={sim.id}>
+                                     {sim.name} (+{formatCurrency(sim.price)})
+                                 </option>
+                             ))}
+                         </select>
+                         {upsellSim && (
+                             <p className="text-xs text-blue-600 mt-2">
+                                 Total will be: <strong>{formatCurrency(currentTotal)}</strong>
+                             </p>
+                         )}
+                     </div>
+                 )}
+
+                 <Button onClick={handleFormSubmit} isLoading={isLoading} className="mt-4 h-14 text-lg">
+                     Pay {formatCurrency(currentTotal)}
+                 </Button>
              </div>
          )}
 
@@ -241,10 +294,10 @@ export const Store: React.FC = () => {
                     ref={receiptRef}
                     transaction={{
                         tx_ref: paymentDetails.tx_ref,
-                        amount: selectedProduct.price,
+                        amount: paymentDetails.amount, // Use payment details amount as it includes upsell
                         date: new Date().toLocaleString(),
                         type: 'Devices',
-                        description: selectedProduct.name,
+                        description: selectedProduct.name + (upsellSim ? ` + ${upsellSim.name}` : ''),
                         status: 'paid',
                         customerName: formData.name,
                         customerPhone: formData.phone

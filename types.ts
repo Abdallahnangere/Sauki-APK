@@ -1,3 +1,4 @@
+
 export interface Product {
   id: string;
   name: string;
@@ -5,6 +6,7 @@ export interface Product {
   price: number;
   image: string;
   inStock: boolean;
+  category: 'device' | 'sim'; // Added category
 }
 
 export interface DataPlan {

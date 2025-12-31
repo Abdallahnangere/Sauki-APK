@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { jsPDF } from 'jspdf';
 import { Button } from '../ui/Button';
@@ -92,7 +93,7 @@ Services are provided "as is". We are not liable for network failures of Telecom
 
 5. CONTACT US
 Email: saukidatalinks@gmail.com
-Phone: 09024099561 and 09076872520
+Phone: +2348061934056 and +2347044647081
     `;
 
     const splitTerms = doc.splitTextToSize(termsContent.trim(), maxLineWidth);
@@ -164,10 +165,10 @@ Phone: 09024099561 and 09076872520
                </ul>
 
                <h4 className="font-bold text-slate-800 mt-4">3. User Obligations</h4>
-               <p>You are responsible for providing accurate phone numbers. We are not liable for funding wrong numbers provided by you.</p>
+               <p>You are responsible for providing accurate information, including correct phone numbers. We are not liable for funding wrong numbers provided by you.</p>
 
                <h4 className="font-bold text-slate-800 mt-4">4. Contact Us</h4>
-               <p>Email: saukidatalinks@gmail.com <br/> Phone: 09024099561 / 09076872520</p>
+               <p>Email: saukidatalinks@gmail.com <br/> Phone: +2348061934056 / +2347044647081</p>
            </div>
        </div>
     </div>
