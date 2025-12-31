@@ -39,7 +39,7 @@ export async function POST(req: Request) {
         
         const transaction = await prisma.transaction.create({
             data: {
-                tx_ref: ,
+                tx_ref: tx_ref,
                 type: 'data',
                 status: isSuccess ? 'delivered' : 'failed',
                 phone,
