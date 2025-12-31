@@ -2,24 +2,51 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>SAUKI MART</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>SAUKI MART | Premium Data & Devices | SMEDAN Certified SME</title>
+    
+    <!-- SEO / Google Indexing -->
+    <meta name="description" content="SAUKI MART: Nigeria's premium hub for instant data bundles and high-end mobile devices. Government certified by SMEDAN. Fast, secure, and ultra-reliable commerce." />
+    <meta name="keywords" content="sauki mart, sauki data, mtn data, airtel data, glo data, routers, mifi, nigeria data app, smedan certified" />
+    <meta name="author" content="Sauki Data Links" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://saukimart.com" />
+    
+    <!-- PWA / Mobile UX -->
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="apple-touch-icon" href="/logo.png" />
+    
+    <!-- Open Graph / Social Media -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="SAUKI MART" />
+    <meta property="og:title" content="SAUKI MART - Premium Data & Commerce" />
+    <meta property="og:description" content="Instant data and premium mobile devices. Subsidiary of Sauki Data Links. SMEDAN Certified SME." />
+    <meta property="og:image" content="/logo.png" />
+    <meta property="og:url" content="https://saukimart.com" />
+
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
     <style>
+      :root {
+        --safe-area-top: env(safe-area-inset-top);
+        --safe-area-bottom: env(safe-area-inset-bottom);
+      }
       body {
         font-family: 'Inter', sans-serif;
-        background-color: #f8fafc; /* slate-50 */
+        background-color: #ffffff;
         -webkit-tap-highlight-color: transparent;
+        overscroll-behavior: none;
+        overflow: hidden; /* Prevent scrolling on the main body */
       }
-      /* Hide scrollbar for clean UI */
-      .no-scrollbar::-webkit-scrollbar {
-        display: none;
-      }
-      .no-scrollbar {
-        -ms-overflow-style: none;
-        scrollbar-width: none;
-      }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      .safe-area-bottom { padding-bottom: var(--safe-area-bottom); }
+      .safe-area-top { padding-top: var(--safe-area-top); }
+      
+      /* Smooth transitions for PWA feel */
+      * { transition: background-color 0.2s ease, border-color 0.2s ease; }
     </style>
   <script type="importmap">
 {
@@ -31,20 +58,21 @@
     "tailwind-merge": "https://esm.sh/tailwind-merge@^3.4.0",
     "framer-motion": "https://esm.sh/framer-motion@^12.23.26",
     "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "@google/genai": "https://esm.sh/@google/genai@^0.21.0",
+    "html-to-image": "https://esm.sh/html-to-image@^1.11.13",
+    "jspdf": "https://esm.sh/jspdf@^3.0.4",
+    "uuid": "https://esm.sh/uuid@^13.0.0",
+    "axios": "https://esm.sh/axios@^1.13.2",
     "@prisma/client": "https://esm.sh/@prisma/client@^7.2.0",
     "next/": "https://esm.sh/next@^16.1.1/",
     "next": "https://esm.sh/next@^16.1.1",
-    "axios": "https://esm.sh/axios@^1.13.2",
-    "uuid": "https://esm.sh/uuid@^13.0.0",
     "tailwindcss": "https://esm.sh/tailwindcss@^4.1.18",
-    "html-to-image": "https://esm.sh/html-to-image@^1.11.13",
-    "https-proxy-agent": "https://esm.sh/https-proxy-agent@^7.0.6",
-    "jspdf": "https://esm.sh/jspdf@^3.0.4"
+    "https-proxy-agent": "https://esm.sh/https-proxy-agent@^7.0.6"
   }
 }
 </script>
 </head>
-  <body>
+  <body class="safe-area-top">
     <div id="root"></div>
   </body>
 </html>
