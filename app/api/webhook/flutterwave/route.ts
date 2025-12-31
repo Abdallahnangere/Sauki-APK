@@ -34,22 +34,32 @@ export async function POST(req: Request) {
         return NextResponse.json({ received: true });
     }
 
+    // 1. Update status to PAID if not already
     if (transaction.status !== 'paid') {
         await prisma.transaction.update({
             where: { id: transaction.id },
             data: { 
                 status: 'paid',
-                paymentData: payload // Object, not string
+                paymentData: payload
             }
         });
     }
 
+    // 2. Attempt Delivery
     if (transaction.type === 'data' && transaction.planId) {
          const plan = await prisma.dataPlan.findUnique({ where: { id: transaction.planId } });
          
          if (plan) {
+             // CROSSCHECK: Ensure the network string from DB (e.g., 'MTN') exists in our mapping
              const networkId = AMIGO_NETWORKS[plan.network];
+
+             if (!networkId) {
+                 console.error(`[Webhook] ❌ Critical: No ID mapped for network ${plan.network}`);
+                 // Optionally flag transaction as failed-delivery or requires-manual-review here
+                 return NextResponse.json({ error: 'Invalid Network Mapping' }, { status: 400 });
+             }
              
+             // Construct Payload with correct Network ID (e.g., 1 for MTN)
              const amigoPayload = {
                  network: networkId,
                  mobile_number: transaction.phone,
@@ -71,7 +81,7 @@ export async function POST(req: Request) {
                      where: { id: transaction.id },
                      data: { 
                          status: 'delivered', 
-                         deliveryData: amigoRes.data // Object, not string
+                         deliveryData: amigoRes.data 
                      }
                  });
              }
