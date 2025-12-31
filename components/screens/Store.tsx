@@ -14,7 +14,7 @@ import { toast } from '../../lib/toast';
 export const Store: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [activeTab, setActiveTab] = useState<'device' | 'sim'>('device');
+  const [activeTab, setActiveTab] = useState<'device' | 'sim' | 'package'>('device');
   
   const [step, setStep] = useState<'details' | 'form' | 'payment' | 'success'>('details');
   const [formData, setFormData] = useState({ name: '', phone: '', state: '' });
@@ -140,19 +140,25 @@ export const Store: React.FC = () => {
         Premium Store
       </h1>
 
-      {/* Tabs */}
-      <div className="flex p-1.5 bg-slate-100 rounded-[1.5rem] mb-6">
+      {/* Tabs - Three Categories Optimized for Scrolling */}
+      <div className="flex p-1.5 bg-slate-100 rounded-[1.5rem] mb-6 overflow-x-auto no-scrollbar">
           <button 
             onClick={() => setActiveTab('device')}
-            className={cn("flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all", activeTab === 'device' ? "bg-white text-slate-900 shadow-md" : "text-slate-500")}
+            className={cn("flex-1 min-w-[100px] whitespace-nowrap px-4 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all", activeTab === 'device' ? "bg-white text-slate-900 shadow-md" : "text-slate-500")}
           >
-            Data Devices
+            Devices
           </button>
           <button 
             onClick={() => setActiveTab('sim')}
-            className={cn("flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all", activeTab === 'sim' ? "bg-white text-slate-900 shadow-md" : "text-slate-500")}
+            className={cn("flex-1 min-w-[100px] whitespace-nowrap px-4 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all", activeTab === 'sim' ? "bg-white text-slate-900 shadow-md" : "text-slate-500")}
           >
-            Data SIM Cards
+            Data SIMs
+          </button>
+          <button 
+            onClick={() => setActiveTab('package')}
+            className={cn("flex-1 min-w-[120px] whitespace-nowrap px-4 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all", activeTab === 'package' ? "bg-white text-slate-900 shadow-md" : "text-slate-500")}
+          >
+            Full Package
           </button>
       </div>
       
@@ -217,15 +223,14 @@ export const Store: React.FC = () => {
                      <div className="bg-slate-50/50 p-6 rounded-[2rem] border border-slate-100">
                         <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Product Description</h4>
                         <p className="text-slate-600 text-sm font-medium leading-relaxed italic">
-                            {selectedProduct.description || "Unleash high-speed performance with Sauki Mart's flagship connectivity suite. This device is optimized for maximum network stability and consistent delivery across all Nigerian regions."}
+                            {selectedProduct.description || "Unleash high-speed performance with Sauki Mart's flagship connectivity suite. Optimized for maximum network stability across all Nigerian regions."}
                         </p>
                      </div>
 
-                     {/* SIM UPSELL moved to Description page */}
-                     {(selectedProduct.category === 'device' || !selectedProduct.category) && availableSims.length > 0 && (
+                     {(selectedProduct.category === 'device' || selectedProduct.category === 'package') && availableSims.length > 0 && (
                          <div className="bg-slate-900 p-6 rounded-[2rem] shadow-2xl shadow-slate-200">
                              <label className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-3 block flex items-center gap-2">
-                                 <Plus className="w-4 h-4 text-blue-400" /> Bundle with Data SIM?
+                                 <Plus className="w-4 h-4 text-blue-400" /> Component Upsell?
                              </label>
                              <select 
                                 className="w-full p-4 rounded-2xl border-none bg-white/10 text-white font-black text-sm backdrop-blur-xl outline-none focus:ring-2 focus:ring-blue-500/50 transition-all appearance-none"
@@ -233,7 +238,7 @@ export const Store: React.FC = () => {
                                 onChange={(e) => setSelectedSimId(e.target.value)}
                                 style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1.5em' }}
                              >
-                                 <option value="" className="text-slate-900">None, Just the Device</option>
+                                 <option value="" className="text-slate-900">None, Just the Base Item</option>
                                  {availableSims.map(sim => (
                                      <option key={sim.id} value={sim.id} className="text-slate-900">
                                          {sim.name} (+{formatCurrency(sim.price)})
@@ -245,7 +250,7 @@ export const Store: React.FC = () => {
                  </div>
 
                  <Button onClick={handleBuyNow} className="h-16 text-xl font-black bg-slate-900 text-white shadow-2xl shadow-slate-200 rounded-[2rem] uppercase tracking-tighter">
-                     Proceed to Secure Checkout {upsellSim && `(${formatCurrency(currentTotal)})`}
+                     Confirm & Purchase {upsellSim && `(${formatCurrency(currentTotal)})`}
                  </Button>
              </div>
          )}

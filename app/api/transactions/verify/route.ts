@@ -9,7 +9,11 @@ export async function POST(req: Request) {
     const { tx_ref } = await req.json();
     
     // Initial Fetch
-    let transaction = await prisma.transaction.findUnique({ where: { tx_ref } });
+    let transaction = await prisma.transaction.findUnique({ 
+        where: { tx_ref },
+        include: { dataPlan: true, product: true } 
+    });
+    
     if (!transaction) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
 
     // Fast exit if already done
@@ -33,7 +37,8 @@ export async function POST(req: Request) {
                         data: { 
                             status: 'paid', 
                             paymentData: flwData
-                        }
+                        },
+                        include: { dataPlan: true, product: true }
                     });
                     currentStatus = 'paid';
                 }
@@ -43,11 +48,10 @@ export async function POST(req: Request) {
         }
     }
 
-    // 2. AUTO-DELIVERY LOGIC (With ATOMIC LOCKING)
+    // 2. AUTO-DELIVERY LOGIC FOR DATA
     if (currentStatus === 'paid' && transaction.type === 'data') {
         
-        // Use updateMany to atomically check if deliveryData is NULL before setting it.
-        // This acts as a lock. Only one request will succeed in updating 0 to 1 records.
+        // Use updateMany for atomicity
         const lockResult = await prisma.transaction.updateMany({
             where: { 
                 id: transaction.id,
@@ -61,63 +65,54 @@ export async function POST(req: Request) {
             }
         });
 
-        // If count is 0, it means deliveryData was NOT null (already processing or done)
-        if (lockResult.count === 0) {
-             const freshTx = await prisma.transaction.findUnique({ where: { id: transaction.id } });
-             return NextResponse.json({ status: freshTx?.status || currentStatus });
-        }
+        if (lockResult.count > 0) {
+            const plan = transaction.dataPlan;
+            if (plan) {
+                const networkId = AMIGO_NETWORKS[plan.network as any];
+                const amigoPayload = {
+                    network: networkId, 
+                    mobile_number: transaction.phone,
+                    plan: Number(plan.planId),
+                    Ported_number: true
+                };
 
-        // We have the lock. Proceed.
-        const plan = await prisma.dataPlan.findUnique({ where: { id: transaction.planId! } });
-        
-        if (plan) {
-            const networkId = AMIGO_NETWORKS[plan.network];
-            
-            const amigoPayload = {
-                network: networkId, 
-                mobile_number: transaction.phone,
-                plan: Number(plan.planId),
-                Ported_number: true
-            };
+                try {
+                    const amigoRes = await callAmigoAPI('/data/', amigoPayload, tx_ref);
+                    const isSuccess = amigoRes.success && (
+                        amigoRes.data.success === true || 
+                        amigoRes.data.Status === 'successful' || 
+                        amigoRes.data.status === 'delivered' ||
+                        amigoRes.data.status === 'successful'
+                    );
 
-            try {
-                // Call Amigo
-                const amigoRes = await callAmigoAPI('/data/', amigoPayload, tx_ref);
-
-                const isSuccess = amigoRes.success && (
-                    amigoRes.data.success === true || 
-                    amigoRes.data.Status === 'successful' || 
-                    amigoRes.data.status === 'delivered' ||
-                    amigoRes.data.status === 'successful'
-                );
-
-                if (isSuccess) {
+                    if (isSuccess) {
+                        const updated = await prisma.transaction.update({
+                            where: { id: transaction.id },
+                            data: {
+                                status: 'delivered',
+                                deliveryData: amigoRes.data
+                            }
+                        });
+                        currentStatus = 'delivered';
+                    } else {
+                        await prisma.transaction.update({
+                            where: { id: transaction.id },
+                            data: {
+                                deliveryData: { ...amigoRes.data, error: 'Amigo API Failed', failedAt: Date.now() }
+                            }
+                        });
+                    }
+                } catch (err: any) {
                     await prisma.transaction.update({
                         where: { id: transaction.id },
-                        data: {
-                            status: 'delivered',
-                            deliveryData: amigoRes.data
-                        }
+                        data: { deliveryData: { error: err.message, failedAt: Date.now() } }
                     });
-                    currentStatus = 'delivered';
-                } else {
-                    // Failed: Record error and keep lock to prevent auto-retry loop.
-                    await prisma.transaction.update({
-                        where: { id: transaction.id },
-                        data: {
-                            deliveryData: { ...amigoRes.data, error: 'Amigo API Failed', failedAt: Date.now() }
-                        }
-                    });
-                    console.error("Amigo Failed:", amigoRes.data);
                 }
-            } catch (err: any) {
-                // On crash, save error
-                await prisma.transaction.update({
-                    where: { id: transaction.id },
-                    data: { deliveryData: { error: err.message, failedAt: Date.now() } }
-                });
-                throw err;
             }
+        } else {
+            // Already processing or done
+            const fresh = await prisma.transaction.findUnique({ where: { id: transaction.id } });
+            currentStatus = fresh?.status || currentStatus;
         }
     }
 

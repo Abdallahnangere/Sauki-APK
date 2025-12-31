@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-// Added Smartphone to the imports from lucide-react
 import { cn, formatCurrency } from '../../lib/utils';
-import { Loader2, Upload, Lock, Trash2, Edit2, Send, Download, Search, Package, Wifi, LayoutDashboard, LogOut, Terminal, Play, RotateCcw, Megaphone, CreditCard, Wallet, Activity, TrendingUp, Users, CheckCircle, Smartphone } from 'lucide-react';
+import { Loader2, Upload, Lock, Trash2, Edit2, Send, Download, Search, Package, Wifi, LayoutDashboard, LogOut, Terminal, Play, RotateCcw, Megaphone, CreditCard, Activity, TrendingUp, CheckCircle, Smartphone } from 'lucide-react';
 import { DataPlan, Product, Transaction } from '../../types';
 import { SharedReceipt } from '../../components/SharedReceipt';
 import { toPng } from 'html-to-image';
@@ -35,7 +34,7 @@ export default function AdminPage() {
   const [flwHistory, setFlwHistory] = useState<Array<{ type: 'req' | 'res', data: any, time: string }>>([]);
 
   const receiptRef = useRef<HTMLDivElement>(null);
-  const [receiptTx, setReceiptTx] = useState<Transaction | null>(null);
+  const [receiptTx, setReceiptTx] = useState<any>(null);
 
   useEffect(() => {
     if (isAuthenticated) fetchData();
@@ -74,13 +73,51 @@ export default function AdminPage() {
       finally { setLoading(false); }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onloadend = () => setProductForm({ ...productForm, image: reader.result as string });
-        reader.readAsDataURL(file);
-    }
+  const handleStatusUpdate = async (tx_ref: string, status: string) => {
+      setLoading(true);
+      try {
+          const res = await fetch('/api/admin/transactions/update', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ tx_ref, status, password })
+          });
+          if (res.ok) {
+              await fetchData();
+              alert(`Order status updated to ${status}`);
+          } else {
+              alert("Update failed");
+          }
+      } catch (e) { alert("Error updating status"); }
+      finally { setLoading(false); }
+  };
+
+  const handleDownloadReceipt = async (tx: Transaction) => {
+      const getDesc = (tx: Transaction) => {
+        if (tx.type === 'data') return `${tx.dataPlan?.network} ${tx.dataPlan?.data}`;
+        return tx.product?.name || 'Item';
+      };
+      
+      setReceiptTx({
+          tx_ref: tx.tx_ref,
+          amount: tx.amount,
+          date: new Date(tx.createdAt).toLocaleString(),
+          type: tx.type === 'ecommerce' ? 'Corporate Order' : 'Data Bundle',
+          description: getDesc(tx),
+          status: tx.status,
+          customerPhone: tx.phone,
+          customerName: tx.customerName
+      });
+      
+      setTimeout(async () => {
+          if (receiptRef.current) {
+              const dataUrl = await toPng(receiptRef.current, { cacheBust: true, pixelRatio: 3 });
+              const link = document.createElement('a');
+              link.download = `RECEIPT-${tx.tx_ref}.png`;
+              link.href = dataUrl;
+              link.click();
+              setReceiptTx(null);
+          }
+      }, 500);
   };
 
   const saveProduct = async () => {
@@ -96,6 +133,21 @@ export default function AdminPage() {
       setView('products');
   };
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onloadend = () => setProductForm({ ...productForm, image: reader.result as string });
+        reader.readAsDataURL(file);
+    }
+  };
+
+  const deleteProduct = async (id: string) => {
+    if (!window.confirm("Delete product?")) return;
+    await fetch(`/api/products?id=${id}`, { method: 'DELETE' });
+    fetchData();
+  };
+
   const savePlan = async () => {
       setLoading(true);
       await fetch('/api/data-plans', { 
@@ -109,32 +161,10 @@ export default function AdminPage() {
       setView('plans');
   };
 
-  // Implemented deleteProduct to fix "Cannot find name 'deleteProduct'" error
-  const deleteProduct = async (id: string) => {
-    if (!window.confirm("Delete this product?")) return;
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/products?id=${id}`, { method: 'DELETE' });
-      if (res.ok) fetchData();
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Implemented deletePlan to fix "Cannot find name 'deletePlan'" error
   const deletePlan = async (id: string) => {
-    if (!window.confirm("Delete this plan?")) return;
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/data-plans?id=${id}`, { method: 'DELETE' });
-      if (res.ok) fetchData();
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+    if (!window.confirm("Delete plan?")) return;
+    await fetch(`/api/data-plans?id=${id}`, { method: 'DELETE' });
+    fetchData();
   };
 
   const handleBroadcast = async () => {
@@ -146,34 +176,25 @@ export default function AdminPage() {
       });
       setLoading(false);
       if (res.ok) {
-          alert("Broadcast Updated!");
+          alert("Broadcast Launched!");
           setBroadcastForm({ content: '', type: 'info', isActive: true });
       } else alert("Failed");
   };
 
-  // Implemented handleManualTopup to fix "Cannot find name 'handleManualTopup'" error
   const handleManualTopup = async () => {
-    if (!manualForm.phone || !manualForm.planId) return alert("Please fill all fields");
-    setLoading(true);
-    try {
+      if (!manualForm.phone || !manualForm.planId) return alert("Missing data");
+      setLoading(true);
       const res = await fetch('/api/admin/manual-topup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...manualForm, password })
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...manualForm, password })
       });
-      const data = await res.json();
-      if (res.ok) {
-        alert("Topup successful!");
-        setManualForm({ phone: '', planId: '' });
-        fetchData();
-      } else {
-        alert(data.error || "Topup failed");
-      }
-    } catch (e) {
-      alert("Error sending topup");
-    } finally {
       setLoading(false);
-    }
+      if (res.ok) {
+          alert("Provisioned Successfully");
+          setManualForm({ phone: '', planId: '' });
+          fetchData();
+      } else alert("Failed");
   };
 
   const sendConsoleRequest = async () => {
@@ -212,6 +233,21 @@ export default function AdminPage() {
       } finally { setLoading(false); }
   };
 
+  // Improved Dynamic Filter for Transactions
+  const filteredTransactions = transactions.filter(t => {
+      const query = searchQuery.toLowerCase().trim();
+      if (!query) return true;
+      return (
+          t.tx_ref.toLowerCase().includes(query) ||
+          t.phone.includes(query) ||
+          (t.customerName && t.customerName.toLowerCase().includes(query)) ||
+          (t.product && t.product.name.toLowerCase().includes(query)) ||
+          (t.dataPlan && t.dataPlan.network.toLowerCase().includes(query))
+      );
+  });
+
+  const ecommerceOrders = filteredTransactions.filter(t => t.type === 'ecommerce');
+
   const stats = {
     totalRevenue: transactions.filter(t => t.status === 'paid' || t.status === 'delivered').reduce((acc, t) => acc + t.amount, 0),
     totalOrders: transactions.filter(t => t.type === 'ecommerce').length,
@@ -220,21 +256,13 @@ export default function AdminPage() {
     activeProducts: products.length
   };
 
-  const filteredTransactions = transactions.filter(t => 
-    t.tx_ref.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    t.phone.includes(searchQuery) ||
-    t.customerName?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const ecommerceOrders = filteredTransactions.filter(t => t.type === 'ecommerce');
-
   if (!isAuthenticated) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-900 p-6">
         <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl w-full max-w-md text-center border border-slate-100">
             <div className="w-20 h-20 bg-slate-900 rounded-[2rem] flex items-center justify-center mx-auto mb-8 shadow-xl"><Lock className="text-white w-8 h-8" /></div>
             <h1 className="text-2xl font-black mb-2 tracking-tight">Admin Portal</h1>
             <p className="text-slate-400 text-xs mb-8 uppercase tracking-[0.2em] font-bold">Encrypted Connection</p>
-            <input type="password" className="border-2 border-slate-100 p-5 rounded-2xl w-full mb-6 bg-slate-50 focus:border-slate-900 outline-none transition-all font-mono" placeholder="Security Key" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && checkAuth()} />
+            <input type="password" title="password" className="border-2 border-slate-100 p-5 rounded-2xl w-full mb-6 bg-slate-50 focus:border-slate-900 outline-none transition-all font-mono" placeholder="Security Key" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && checkAuth()} />
             <button onClick={checkAuth} className="bg-slate-900 text-white p-5 rounded-[1.5rem] w-full font-black shadow-xl hover:bg-slate-800 transition active:scale-95 uppercase tracking-widest">{loading ? <Loader2 className="animate-spin mx-auto" /> : 'Enter Dashboard'}</button>
         </div>
     </div>
@@ -242,11 +270,15 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans">
+        <div className="hidden">
+           {receiptTx && <SharedReceipt ref={receiptRef} transaction={receiptTx} />}
+        </div>
+
         {/* Sidebar */}
-        <aside className="w-72 bg-slate-900 text-white hidden md:flex flex-col fixed h-full z-10 shadow-2xl">
+        <aside className="w-72 bg-slate-900 text-white hidden lg:flex flex-col fixed h-full z-10 shadow-2xl">
             <div className="p-10 border-b border-slate-800">
                 <div className="flex items-center gap-3">
-                    <img src="/logo.png" className="w-10 h-10 bg-white rounded-xl p-1.5" />
+                    <img src="/logo.png" className="w-10 h-10 bg-white rounded-xl p-1.5" alt="Logo" />
                     <div>
                         <h1 className="text-xl font-black tracking-tighter">SAUKI MART</h1>
                         <p className="text-blue-400 text-[10px] font-black uppercase tracking-widest">Administrator</p>
@@ -276,13 +308,13 @@ export default function AdminPage() {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 md:ml-72 p-10 overflow-y-auto h-screen">
+        <main className="flex-1 lg:ml-72 p-10 overflow-y-auto h-screen">
             <header className="flex justify-between items-center mb-10">
                 <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">{view}</h2>
                 <div className="flex items-center gap-4">
                     <div className="relative">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                        <input type="text" placeholder="Search reference, phone..." className="pl-11 pr-6 py-3 bg-white border border-slate-100 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-slate-900 w-64 shadow-sm" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                        <input type="text" placeholder="Search reference, phone, name..." className="pl-11 pr-6 py-3 bg-white border border-slate-100 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-slate-900 w-64 shadow-sm" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                     </div>
                     <button onClick={fetchData} className="p-3 bg-white border border-slate-100 rounded-2xl shadow-sm hover:bg-slate-50 transition-colors"><RotateCcw className={cn("w-5 h-5 text-slate-600", loading && "animate-spin")} /></button>
                 </div>
@@ -306,49 +338,6 @@ export default function AdminPage() {
                             </div>
                         ))}
                     </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        <div className="bg-white rounded-[2rem] p-8 border border-slate-100 shadow-sm">
-                            <h3 className="font-black text-lg mb-6 uppercase tracking-tight">Recent Orders</h3>
-                            <div className="space-y-4">
-                                {ecommerceOrders.slice(0, 5).map(order => (
-                                    <div key={order.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center border border-slate-100"><Package className="w-5 h-5 text-slate-900" /></div>
-                                            <div>
-                                                <p className="font-black text-slate-900 text-sm uppercase">{order.customerName}</p>
-                                                <p className="text-[10px] text-slate-400 font-bold">{order.phone}</p>
-                                            </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="font-black text-slate-900 text-sm">{formatCurrency(order.amount)}</p>
-                                            <span className={cn("text-[8px] font-black uppercase px-2 py-0.5 rounded-full", order.status === 'paid' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700')}>{order.status}</span>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                        <div className="bg-slate-900 rounded-[2rem] p-8 text-white relative overflow-hidden">
-                            <TrendingUp className="absolute -right-10 -bottom-10 w-64 h-64 text-white/5" />
-                            <h3 className="font-black text-lg mb-2 uppercase tracking-tight relative z-10">Performance Sync</h3>
-                            <p className="text-white/40 text-xs mb-8 relative z-10">Real-time gateway connectivity status.</p>
-                            <div className="space-y-6 relative z-10">
-                                {[
-                                    { label: 'Flutterwave API', status: 'Online', delay: '124ms' },
-                                    { label: 'Amigo Tunnel', status: 'Active', delay: '48ms' },
-                                    { label: 'Database Node', status: 'Synced', delay: '12ms' },
-                                ].map((item, i) => (
-                                    <div key={i} className="flex justify-between items-center">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]"></div>
-                                            <span className="text-sm font-black uppercase tracking-tight">{item.label}</span>
-                                        </div>
-                                        <span className="text-[10px] font-mono text-white/40">{item.delay}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
                 </div>
             )}
 
@@ -358,9 +347,8 @@ export default function AdminPage() {
                         <thead className="bg-slate-50 border-b border-slate-100">
                             <tr>
                                 <th className="p-6 text-[10px] font-black uppercase text-slate-400">Customer</th>
-                                <th className="p-6 text-[10px] font-black uppercase text-slate-400">Order Ref</th>
+                                <th className="p-6 text-[10px] font-black uppercase text-slate-400">Ref</th>
                                 <th className="p-6 text-[10px] font-black uppercase text-slate-400">Item</th>
-                                <th className="p-6 text-[10px] font-black uppercase text-slate-400">Amount</th>
                                 <th className="p-6 text-[10px] font-black uppercase text-slate-400">Status</th>
                                 <th className="p-6 text-[10px] font-black uppercase text-slate-400 text-right">Action</th>
                             </tr>
@@ -369,19 +357,28 @@ export default function AdminPage() {
                             {ecommerceOrders.map(order => (
                                 <tr key={order.id} className="hover:bg-slate-50 transition-colors">
                                     <td className="p-6">
-                                        <p className="font-black text-slate-900 text-sm">{order.customerName}</p>
+                                        <p className="font-black text-slate-900 text-sm uppercase">{order.customerName}</p>
                                         <p className="text-[10px] text-slate-500 font-bold">{order.phone}</p>
                                     </td>
                                     <td className="p-6 font-mono text-[10px] text-slate-400">{order.tx_ref}</td>
-                                    <td className="p-6 text-xs font-bold text-slate-600">{order.product?.name || 'Device'}</td>
-                                    <td className="p-6 font-black text-slate-900 text-sm">{formatCurrency(order.amount)}</td>
+                                    <td className="p-6 text-xs font-bold text-slate-600 uppercase">{order.product?.name || 'Device'}</td>
                                     <td className="p-6">
-                                        <span className={cn("text-[9px] font-black uppercase px-3 py-1 rounded-full", order.status === 'paid' ? 'bg-blue-100 text-blue-700' : order.status === 'delivered' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-700')}>
+                                        <span className={cn("text-[9px] font-black uppercase px-3 py-1 rounded-full", order.status === 'delivered' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700')}>
                                             {order.status}
                                         </span>
                                     </td>
                                     <td className="p-6 text-right">
-                                        <button className="text-blue-600 text-[10px] font-black uppercase hover:underline">Mark Delivered</button>
+                                        <div className="flex justify-end gap-2">
+                                            {order.status !== 'delivered' && (
+                                                <button 
+                                                    onClick={() => handleStatusUpdate(order.tx_ref, 'delivered')}
+                                                    className="bg-green-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-green-100"
+                                                >
+                                                    Mark Delivered
+                                                </button>
+                                            )}
+                                            <button onClick={() => handleDownloadReceipt(order)} className="p-2 bg-slate-100 rounded-xl text-slate-600 hover:bg-slate-200"><Download className="w-4 h-4" /></button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -393,52 +390,128 @@ export default function AdminPage() {
             {view === 'transactions' && (
                 <div className="space-y-4">
                     {filteredTransactions.map(tx => (
-                        <div key={tx.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex justify-between items-center">
+                        <div key={tx.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex justify-between items-center group">
                             <div className="flex items-center gap-6">
                                 <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center shadow-inner", tx.type === 'data' ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600')}>
                                     {tx.type === 'data' ? <Wifi className="w-6 h-6" /> : <Package className="w-6 h-6" />}
                                 </div>
                                 <div>
                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{tx.tx_ref}</p>
-                                    <p className="font-black text-slate-900 text-base uppercase">{tx.type === 'data' ? `${tx.dataPlan?.network} ${tx.dataPlan?.data}` : tx.product?.name || 'Device'}</p>
-                                    <p className="text-[10px] text-slate-500 font-bold">BY: {tx.customerName || tx.phone}</p>
+                                    <p className="font-black text-slate-900 text-base uppercase tracking-tight">
+                                        {tx.type === 'data' ? `${tx.dataPlan?.network} ${tx.dataPlan?.data}` : tx.product?.name || 'Device'}
+                                    </p>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{tx.phone}</p>
                                 </div>
                             </div>
-                            <div className="text-right flex items-center gap-8">
-                                <div>
-                                    <p className="font-black text-slate-900 text-lg">{formatCurrency(tx.amount)}</p>
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase">{new Date(tx.createdAt).toLocaleString()}</p>
+                            <div className="text-right flex items-center gap-6">
+                                <div className="text-right">
+                                    <p className="font-black text-slate-900 text-lg tracking-tighter">{formatCurrency(tx.amount)}</p>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase">{new Date(tx.createdAt).toLocaleDateString()}</p>
                                 </div>
-                                <span className={cn("text-[10px] font-black uppercase px-4 py-2 rounded-xl", tx.status === 'delivered' ? 'bg-green-100 text-green-700' : tx.status === 'paid' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700')}>
-                                    {tx.status}
-                                </span>
+                                <div className="flex items-center gap-3">
+                                    <span className={cn("text-[9px] font-black uppercase px-4 py-2 rounded-xl", tx.status === 'delivered' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700')}>
+                                        {tx.status}
+                                    </span>
+                                    {(tx.status === 'delivered' || tx.status === 'paid') && (
+                                        <button onClick={() => handleDownloadReceipt(tx)} className="p-3 bg-slate-50 rounded-xl text-slate-500 hover:bg-slate-900 hover:text-white transition-all"><Download className="w-5 h-5" /></button>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     ))}
                 </div>
             )}
 
+            {(view === 'products' || view === 'plans') && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                     <div className="lg:col-span-2 bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden h-fit">
+                         <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                            <h3 className="font-black text-lg uppercase tracking-tight">Existing {view}</h3>
+                            <button onClick={() => { setEditMode(false); setProductForm({category: 'device'}); setPlanForm({}); }} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg">+ New Entry</button>
+                         </div>
+                         <div className="max-h-[650px] overflow-y-auto p-6 space-y-3 no-scrollbar">
+                            {(view === 'products' ? products : plans).map((item: any) => (
+                                <div key={item.id} className="flex justify-between items-center p-5 bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+                                    <div className="flex items-center gap-5">
+                                        {view === 'products' && (
+                                            <div className="w-14 h-14 bg-slate-50 rounded-xl p-2 border border-slate-100 flex items-center justify-center overflow-hidden">
+                                                <img src={item.image} className="w-full h-full object-contain" alt="Preview" />
+                                            </div>
+                                        )}
+                                        <div>
+                                            <div className="font-black text-slate-900 uppercase text-sm tracking-tight">{item.name || `${item.network} ${item.data}`}</div>
+                                            <div className="text-[10px] text-slate-500 font-bold uppercase flex items-center gap-2">
+                                                {formatCurrency(item.price)} 
+                                                {view === 'products' && <span className="bg-slate-100 px-2 py-0.5 rounded text-[8px]">{item.category}</span>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => { setEditMode(true); view === 'products' ? setProductForm(item) : setPlanForm(item); }} className="p-3 bg-white border border-slate-100 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition-all"><Edit2 className="w-4 h-4" /></button>
+                                        <button onClick={() => view === 'products' ? deleteProduct(item.id) : deletePlan(item.id)} className="p-3 bg-white border border-slate-100 rounded-xl hover:bg-red-50 hover:text-red-600 transition-all"><Trash2 className="w-4 h-4" /></button>
+                                    </div>
+                                </div>
+                            ))}
+                         </div>
+                     </div>
+
+                     <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 h-fit">
+                         <h3 className="font-black text-xl mb-8 uppercase tracking-tighter">{editMode ? 'Modify' : 'Create'} {view === 'products' ? 'Product' : 'Plan'}</h3>
+                         {view === 'products' ? (
+                            <div className="space-y-5">
+                                <div className="border-4 border-dashed border-slate-100 p-8 rounded-3xl text-center relative hover:bg-slate-50 transition-all cursor-pointer group overflow-hidden">
+                                    {productForm.image ? <img src={productForm.image} className="h-32 mx-auto object-contain drop-shadow-lg" alt="Upload" /> : <div className="text-slate-400 py-4"><Upload className="mx-auto mb-3 w-8 h-8 opacity-20" /> <span className="text-[10px] font-black uppercase tracking-widest">Select Visual</span></div>}
+                                    <input type="file" title="image" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
+                                </div>
+                                
+                                <div>
+                                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Category Type</label>
+                                    <select className="border-2 border-slate-50 p-4 w-full rounded-2xl bg-white font-black text-xs uppercase" value={productForm.category || 'device'} onChange={e => setProductForm({...productForm, category: e.target.value as any})}>
+                                        <option value="device">Standalone Device</option>
+                                        <option value="sim">Data SIM Component</option>
+                                        <option value="package">Full Package Suite</option>
+                                    </select>
+                                </div>
+
+                                <input className="border-2 border-slate-50 p-4 w-full rounded-2xl outline-none focus:border-slate-900 transition-all text-sm font-medium" placeholder="Label" value={productForm.name} onChange={e => setProductForm({...productForm, name: e.target.value})} />
+                                <textarea className="border-2 border-slate-50 p-4 w-full rounded-2xl outline-none focus:border-slate-900 transition-all text-sm font-medium h-24" placeholder="Smart Marketing Copy..." value={productForm.description} onChange={e => setProductForm({...productForm, description: e.target.value})} />
+                                <input className="border-2 border-slate-50 p-4 w-full rounded-2xl outline-none focus:border-slate-900 transition-all text-sm font-black" type="number" placeholder="Price (NGN)" value={productForm.price || ''} onChange={e => setProductForm({...productForm, price: Number(e.target.value)})} />
+                                <button onClick={saveProduct} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all">{loading ? <Loader2 className="animate-spin mx-auto" /> : 'Sync Inventory'}</button>
+                            </div>
+                         ) : (
+                            <div className="space-y-5">
+                                <div>
+                                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Carrier Provider</label>
+                                    <select className="border-2 border-slate-50 p-4 w-full rounded-2xl bg-white font-black text-xs uppercase" value={planForm.network} onChange={e => setPlanForm({...planForm, network: e.target.value as any})}>
+                                        <option value="MTN">MTN</option><option value="AIRTEL">AIRTEL</option><option value="GLO">GLO</option>
+                                    </select>
+                                </div>
+                                <input className="border-2 border-slate-50 p-4 w-full rounded-2xl text-sm font-black uppercase" placeholder="Data Volume (e.g. 50GB)" value={planForm.data} onChange={e => setPlanForm({...planForm, data: e.target.value})} />
+                                <input className="border-2 border-slate-50 p-4 w-full rounded-2xl text-sm font-medium uppercase" placeholder="Validity Period" value={planForm.validity} onChange={e => setPlanForm({...planForm, validity: e.target.value})} />
+                                <input className="border-2 border-slate-50 p-4 w-full rounded-2xl text-sm font-black" type="number" placeholder="Retail Price" value={planForm.price || ''} onChange={e => setPlanForm({...planForm, price: Number(e.target.value)})} />
+                                <input className="border-2 border-slate-50 p-4 w-full rounded-2xl text-[10px] font-mono" type="number" placeholder="Amigo Plan ID" value={planForm.planId || ''} onChange={e => setPlanForm({...planForm, planId: Number(e.target.value)})} />
+                                <button onClick={savePlan} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all">{loading ? <Loader2 className="animate-spin mx-auto" /> : 'Sync Data Plan'}</button>
+                            </div>
+                         )}
+                     </div>
+                </div>
+            )}
+
             {view === 'manual' && (
                 <div className="max-w-2xl mx-auto bg-white p-12 rounded-[2.5rem] border border-slate-100 shadow-2xl">
                     <div className="text-center mb-10">
-                        <div className="w-20 h-20 bg-blue-600 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-xl shadow-blue-100 text-white"><Send className="w-8 h-8" /></div>
-                        <h3 className="text-2xl font-black text-slate-900 tracking-tight uppercase">Manual Data Provision</h3>
-                        <p className="text-slate-500 text-xs font-medium mt-2">Instantly push data bundles to any mobile number via Amigo Tunnel.</p>
+                        <div className="w-20 h-20 bg-blue-600 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-xl text-white"><Send className="w-8 h-8" /></div>
+                        <h3 className="text-2xl font-black text-slate-900 tracking-tight uppercase">Provisioning Engine</h3>
+                        <p className="text-slate-500 text-xs font-medium mt-2">Force-push data bundles via Amigo direct tunnel.</p>
                     </div>
                     <div className="space-y-6">
-                        <div>
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Recipient Phone</label>
-                            <input className="w-full p-5 rounded-2xl bg-slate-50 border-2 border-slate-100 outline-none focus:border-blue-600 transition-all font-mono text-xl" placeholder="080..." value={manualForm.phone} onChange={e => setManualForm({...manualForm, phone: e.target.value})} />
-                        </div>
-                        <div>
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Select Plan</label>
-                            <select className="w-full p-5 rounded-2xl bg-slate-50 border-2 border-slate-100 outline-none focus:border-blue-600 transition-all font-black text-sm uppercase" value={manualForm.planId} onChange={e => setManualForm({...manualForm, planId: e.target.value})}>
-                                <option value="">CHOOSE A DATA BUNDLE</option>
-                                {plans.map(p => <option key={p.id} value={p.id}>{p.network} {p.data} - {p.validity} ({formatCurrency(p.price)})</option>)}
-                            </select>
-                        </div>
-                        <button onClick={handleManualTopup} disabled={loading} className="w-full p-6 bg-slate-900 text-white rounded-[1.5rem] font-black uppercase tracking-widest shadow-2xl hover:bg-slate-800 transition active:scale-95 disabled:opacity-50">
-                            {loading ? <Loader2 className="animate-spin mx-auto" /> : 'Execute Provisioning'}
+                        <input className="w-full p-5 rounded-2xl bg-slate-50 border-2 border-slate-100 outline-none focus:border-blue-600 transition-all font-mono text-xl" placeholder="Recipient: 080..." value={manualForm.phone} onChange={e => setManualForm({...manualForm, phone: e.target.value})} />
+                        <select className="w-full p-5 rounded-2xl bg-slate-50 border-2 border-slate-100 outline-none focus:border-blue-600 transition-all font-black text-sm uppercase" value={manualForm.planId} onChange={e => setManualForm({...manualForm, planId: e.target.value})}>
+                            <option value="">Choose Payload...</option>
+                            {plans.map(p => <option key={p.id} value={p.id}>{p.network} {p.data} ({formatCurrency(p.price)})</option>)}
+                        </select>
+                        <button onClick={handleManualTopup} disabled={loading} className="w-full p-6 bg-slate-900 text-white rounded-[1.5rem] font-black uppercase tracking-widest shadow-2xl hover:bg-slate-800 transition active:scale-95">
+                            {loading ? <Loader2 className="animate-spin mx-auto" /> : 'Execute Payload'}
                         </button>
                     </div>
                 </div>
@@ -447,27 +520,21 @@ export default function AdminPage() {
             {view === 'broadcast' && (
                 <div className="max-w-2xl mx-auto bg-white p-12 rounded-[2.5rem] border border-slate-100 shadow-2xl">
                     <div className="text-center mb-10">
-                        <div className="w-20 h-20 bg-orange-500 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-xl shadow-orange-100 text-white"><Megaphone className="w-8 h-8" /></div>
+                        <div className="w-20 h-20 bg-orange-500 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-xl text-white"><Megaphone className="w-8 h-8" /></div>
                         <h3 className="text-2xl font-black text-slate-900 tracking-tight uppercase">App Broadcast</h3>
-                        <p className="text-slate-500 text-xs font-medium mt-2">Push a global notification message to all app users instantly.</p>
+                        <p className="text-slate-500 text-xs font-medium mt-2">Update the scrolling ticker message on user dashboards.</p>
                     </div>
                     <div className="space-y-6">
-                        <div>
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Message Content</label>
-                            <textarea className="w-full p-5 rounded-2xl bg-slate-50 border-2 border-slate-100 outline-none focus:border-orange-500 transition-all font-medium text-sm min-h-[120px]" placeholder="Special promo: Get 10% off devices today!" value={broadcastForm.content} onChange={e => setBroadcastForm({...broadcastForm, content: e.target.value})} />
+                        <textarea className="w-full p-5 rounded-2xl bg-slate-50 border-2 border-slate-100 outline-none focus:border-orange-500 transition-all font-medium text-sm min-h-[120px]" placeholder="Broadcast content..." value={broadcastForm.content} onChange={e => setBroadcastForm({...broadcastForm, content: e.target.value})} />
+                        <div className="grid grid-cols-3 gap-3">
+                            {['info', 'warning', 'alert'].map(type => (
+                                <button key={type} onClick={() => setBroadcastForm({...broadcastForm, type})} className={cn("p-4 rounded-xl border-2 font-black text-[10px] uppercase", broadcastForm.type === type ? 'border-orange-500 bg-orange-500 text-white' : 'border-slate-100 bg-slate-50 text-slate-500')}>
+                                    {type}
+                                </button>
+                            ))}
                         </div>
-                        <div>
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Banner Type</label>
-                            <div className="grid grid-cols-3 gap-3">
-                                {['info', 'warning', 'alert'].map(type => (
-                                    <button key={type} onClick={() => setBroadcastForm({...broadcastForm, type})} className={cn("p-4 rounded-xl border-2 font-black text-[10px] uppercase transition-all", broadcastForm.type === type ? 'border-orange-500 bg-orange-500 text-white shadow-lg' : 'border-slate-100 bg-slate-50 text-slate-500')}>
-                                        {type}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                        <button onClick={handleBroadcast} disabled={loading} className="w-full p-6 bg-slate-900 text-white rounded-[1.5rem] font-black uppercase tracking-widest shadow-2xl hover:bg-slate-800 transition active:scale-95">
-                            {loading ? <Loader2 className="animate-spin mx-auto" /> : 'Launch Broadcast'}
+                        <button onClick={handleBroadcast} disabled={loading} className="w-full p-6 bg-slate-900 text-white rounded-[1.5rem] font-black uppercase tracking-widest shadow-2xl active:scale-95">
+                            {loading ? <Loader2 className="animate-spin mx-auto" /> : 'Update Dashboard'}
                         </button>
                     </div>
                 </div>
@@ -478,128 +545,37 @@ export default function AdminPage() {
                     <div className="flex flex-col gap-6">
                         <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm flex-1">
                             <h3 className="font-black text-lg mb-6 uppercase tracking-tight flex items-center gap-3">
-                                {view === 'console' ? <Terminal className="w-5 h-5 text-blue-600" /> : <CreditCard className="w-5 h-5 text-orange-600" />}
-                                Request Terminal
+                                <Terminal className="w-5 h-5 text-blue-600" /> API Console
                             </h3>
                             <div className="space-y-4">
                                 {view === 'flw_console' && (
-                                    <select className="w-full p-4 rounded-xl bg-slate-50 border border-slate-100 font-black text-xs outline-none" value={flwMethod} onChange={e => setFlwMethod(e.target.value)}>
-                                        <option value="GET">GET</option><option value="POST">POST</option><option value="PUT">PUT</option>
+                                    <select className="w-full p-4 rounded-xl bg-slate-50 border border-slate-100 font-black text-xs" value={flwMethod} onChange={e => setFlwMethod(e.target.value)}>
+                                        <option value="GET">GET</option><option value="POST">POST</option>
                                     </select>
                                 )}
-                                <input className="w-full p-4 rounded-xl bg-slate-50 border border-slate-100 font-mono text-xs outline-none" placeholder="Endpoint (/data/)" value={view === 'console' ? consoleEndpoint : flwEndpoint} onChange={e => view === 'console' ? setConsoleEndpoint(e.target.value) : setFlwEndpoint(e.target.value)} />
-                                <div className="flex-1 relative">
-                                    <textarea className="w-full h-64 p-5 rounded-2xl bg-slate-900 text-blue-400 font-mono text-xs outline-none resize-none shadow-inner" value={view === 'console' ? consolePayload : flwPayload} onChange={e => view === 'console' ? setConsolePayload(e.target.value) : setFlwPayload(e.target.value)} />
-                                    <div className="absolute top-4 right-4 text-[8px] font-black text-slate-700 uppercase tracking-widest">JSON Payload</div>
-                                </div>
-                                <button onClick={view === 'console' ? sendConsoleRequest : sendFlwRequest} className="w-full p-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-transform">
-                                    {loading ? <Loader2 className="animate-spin w-5 h-5" /> : <Play className="w-4 h-4" />} Execute Request
+                                <input className="w-full p-4 rounded-xl bg-slate-50 border border-slate-100 font-mono text-xs" value={view === 'console' ? consoleEndpoint : flwEndpoint} onChange={e => view === 'console' ? setConsoleEndpoint(e.target.value) : setFlwEndpoint(e.target.value)} />
+                                <textarea className="w-full h-64 p-5 rounded-2xl bg-slate-900 text-blue-400 font-mono text-xs outline-none" value={view === 'console' ? consolePayload : flwPayload} onChange={e => view === 'console' ? setConsolePayload(e.target.value) : setFlwPayload(e.target.value)} />
+                                <button onClick={view === 'console' ? sendConsoleRequest : sendFlwRequest} className="w-full p-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest shadow-xl flex items-center justify-center gap-3">
+                                    {loading ? <Loader2 className="animate-spin w-5 h-5" /> : <Play className="w-4 h-4" />} Fire Request
                                 </button>
                             </div>
                         </div>
                     </div>
                     <div className="bg-slate-900 rounded-[2rem] p-8 flex flex-col relative overflow-hidden shadow-2xl">
-                        <div className="absolute top-0 right-0 p-8 opacity-5"><Activity className="w-64 h-64 text-white" /></div>
                         <h3 className="text-white font-black text-lg mb-6 uppercase tracking-tight relative z-10 flex items-center gap-3">
-                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                            Console Output
+                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div> Response Output
                         </h3>
-                        <div className="flex-1 overflow-y-auto space-y-4 no-scrollbar relative z-10">
+                        <div className="flex-1 overflow-y-auto space-y-4 no-scrollbar relative z-10 font-mono text-xs">
                             {(view === 'console' ? consoleHistory : flwHistory).map((h, i) => (
-                                <div key={i} className={cn("p-4 rounded-2xl font-mono text-xs break-all border", h.type === 'req' ? 'bg-slate-800 text-blue-300 border-slate-700' : 'bg-slate-950 text-green-400 border-slate-800')}>
-                                    <div className="flex justify-between mb-2 border-b border-white/5 pb-2 opacity-50">
-                                        <span className="uppercase font-black text-[8px] tracking-widest">{h.type === 'req' ? 'Request' : 'Response'}</span>
-                                        <span className="text-[8px]">{h.time}</span>
-                                    </div>
+                                <div key={i} className={cn("p-4 rounded-2xl border", h.type === 'req' ? 'bg-slate-800 text-blue-300 border-slate-700' : 'bg-slate-950 text-green-400 border-slate-800')}>
                                     <pre className="whitespace-pre-wrap">{JSON.stringify(h.data, null, 2)}</pre>
                                 </div>
                             ))}
-                            {(view === 'console' ? consoleHistory : flwHistory).length === 0 && <p className="text-slate-600 text-xs text-center py-20 font-black uppercase tracking-widest">Waiting for execution...</p>}
                         </div>
                     </div>
                 </div>
             )}
-
-            {(view === 'products' || view === 'plans') && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                     <div className="lg:col-span-2 bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
-                         <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                            <h3 className="font-black text-lg uppercase tracking-tight">Existing {view}</h3>
-                            <button onClick={() => { setEditMode(false); setProductForm({category: 'device'}); setPlanForm({}); }} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg">+ Add New</button>
-                         </div>
-                         <div className="max-h-[600px] overflow-y-auto p-6 space-y-3 no-scrollbar">
-                            {(view === 'products' ? products : plans).map((item: any) => (
-                                <div key={item.id} className="flex justify-between items-center p-5 bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group">
-                                    <div className="flex items-center gap-5">
-                                        {view === 'products' && (
-                                            <div className="w-14 h-14 bg-slate-50 rounded-xl p-2 border border-slate-100 flex items-center justify-center overflow-hidden">
-                                                <img src={item.image} className="w-full h-full object-contain" />
-                                            </div>
-                                        )}
-                                        <div>
-                                            <div className="font-black text-slate-900 uppercase text-sm tracking-tight">{item.name || `${item.network} ${item.data}`}</div>
-                                            <div className="text-[10px] text-slate-500 font-bold uppercase flex items-center gap-2">
-                                                {formatCurrency(item.price)} 
-                                                {view === 'products' && <span className="w-1 h-1 rounded-full bg-slate-300"></span>}
-                                                {view === 'products' && <span className="bg-slate-100 px-2 py-0.5 rounded text-[8px]">{item.category}</span>}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => { setEditMode(true); view === 'products' ? setProductForm(item) : setPlanForm(item); }} className="p-3 bg-white border border-slate-100 rounded-xl hover:bg-blue-50 hover:border-blue-200 text-slate-400 hover:text-blue-600 transition-all"><Edit2 className="w-4 h-4" /></button>
-                                        <button onClick={() => view === 'products' ? deleteProduct(item.id) : deletePlan(item.id)} className="p-3 bg-white border border-slate-100 rounded-xl hover:bg-red-50 hover:border-red-200 text-slate-400 hover:text-red-600 transition-all"><Trash2 className="w-4 h-4" /></button>
-                                    </div>
-                                </div>
-                            ))}
-                         </div>
-                     </div>
-
-                     <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 h-fit sticky top-10">
-                         <h3 className="font-black text-xl mb-8 uppercase tracking-tighter">{editMode ? 'Edit' : 'Create'} {view === 'products' ? 'Product' : 'Plan'}</h3>
-                         {view === 'products' ? (
-                            <div className="space-y-5">
-                                <div className="border-4 border-dashed border-slate-100 p-8 rounded-3xl text-center relative hover:bg-slate-50 transition-all cursor-pointer group overflow-hidden">
-                                    {productForm.image ? <img src={productForm.image} className="h-32 mx-auto object-contain drop-shadow-lg group-hover:scale-110 transition-transform" /> : <div className="text-slate-400 py-4"><Upload className="mx-auto mb-3 w-8 h-8 opacity-20" /> <span className="text-[10px] font-black uppercase tracking-widest">Select Product Image</span></div>}
-                                    <input type="file" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
-                                </div>
-                                
-                                <div>
-                                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Category</label>
-                                    <select className="border-2 border-slate-50 p-4 w-full rounded-2xl bg-white font-black text-xs uppercase" value={productForm.category || 'device'} onChange={e => setProductForm({...productForm, category: e.target.value as 'device' | 'sim'})}>
-                                        <option value="device">Router / Modem / Gadget</option>
-                                        <option value="sim">Special Data SIM Card</option>
-                                    </select>
-                                </div>
-
-                                <input className="border-2 border-slate-50 p-4 w-full rounded-2xl outline-none focus:border-slate-900 transition-all text-sm font-medium" placeholder="Product Name" value={productForm.name} onChange={e => setProductForm({...productForm, name: e.target.value})} />
-                                <textarea className="border-2 border-slate-50 p-4 w-full rounded-2xl outline-none focus:border-slate-900 transition-all text-sm font-medium h-24" placeholder="Smart Description..." value={productForm.description} onChange={e => setProductForm({...productForm, description: e.target.value})} />
-                                <input className="border-2 border-slate-50 p-4 w-full rounded-2xl outline-none focus:border-slate-900 transition-all text-sm font-black" type="number" placeholder="Price (NGN)" value={productForm.price || ''} onChange={e => setProductForm({...productForm, price: Number(e.target.value)})} />
-                                <button onClick={saveProduct} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all">{loading ? <Loader2 className="animate-spin mx-auto" /> : 'Save Item'}</button>
-                            </div>
-                         ) : (
-                            <div className="space-y-5">
-                                <div>
-                                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Provider</label>
-                                    <select className="border-2 border-slate-50 p-4 w-full rounded-2xl bg-white font-black text-xs uppercase" value={planForm.network} onChange={e => setPlanForm({...planForm, network: e.target.value as any})}>
-                                        <option value="MTN">MTN</option><option value="AIRTEL">AIRTEL</option><option value="GLO">GLO</option>
-                                    </select>
-                                </div>
-                                <input className="border-2 border-slate-50 p-4 w-full rounded-2xl text-sm font-black" placeholder="Bundle Size (e.g. 10GB)" value={planForm.data} onChange={e => setPlanForm({...planForm, data: e.target.value})} />
-                                <input className="border-2 border-slate-50 p-4 w-full rounded-2xl text-sm font-medium" placeholder="Validity (30 Days)" value={planForm.validity} onChange={e => setPlanForm({...planForm, validity: e.target.value})} />
-                                <input className="border-2 border-slate-50 p-4 w-full rounded-2xl text-sm font-black" type="number" placeholder="Price (NGN)" value={planForm.price || ''} onChange={e => setPlanForm({...planForm, price: Number(e.target.value)})} />
-                                <input className="border-2 border-slate-50 p-4 w-full rounded-2xl text-[10px] font-mono" type="number" placeholder="Amigo Plan ID Code" value={planForm.planId || ''} onChange={e => setPlanForm({...planForm, planId: Number(e.target.value)})} />
-                                <button onClick={savePlan} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all">{loading ? <Loader2 className="animate-spin mx-auto" /> : 'Save Data Plan'}</button>
-                            </div>
-                         )}
-                     </div>
-                </div>
-            )}
         </main>
-
-        {/* Global Manual Topup Dialog - Background helper */}
-        <div className="hidden">
-           <SharedReceipt ref={receiptRef} transaction={receiptTx ? { ...receiptTx, date: new Date(receiptTx.createdAt).toLocaleString(), description: 'Item' } as any : ({} as any)} />
-        </div>
     </div>
   );
 }

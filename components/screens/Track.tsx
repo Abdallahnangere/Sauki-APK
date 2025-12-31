@@ -1,10 +1,11 @@
+
 import React, { useState, useRef } from 'react';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { api } from '../../lib/api';
 import { Transaction } from '../../types';
 import { cn, formatCurrency } from '../../lib/utils';
-import { Search, Download, RefreshCw, AlertTriangle, Loader2 } from 'lucide-react';
+import { Search, Download, RefreshCw, AlertTriangle, Loader2, CheckCircle2 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { SharedReceipt } from '../SharedReceipt';
 import { toast } from '../../lib/toast';
@@ -36,19 +37,28 @@ export const Track: React.FC = () => {
 
   const handleRetry = async (tx_ref: string, id: string) => {
       setRetryingId(id);
+      toast.info("Verifying with payment gateway...");
       try {
+          // 1. Verify Payment & Auto-Trigger Delivery if Paid
           const res = await api.verifyTransaction(tx_ref);
-          await handleTrack();
+          
+          // 2. Re-fetch current state
+          const refreshRes = await api.trackTransactions(phone);
+          if (refreshRes?.transactions) {
+            setTransactions(refreshRes.transactions);
+          }
           
           if (res.status === 'delivered') {
-              toast.success("Success! Data delivered.");
+              toast.success("Transaction Complete: Item Delivered!");
           } else if (res.status === 'paid') {
-              toast.info("Payment confirmed, delivery pending.");
+              toast.success("Payment confirmed! Logistics team notified.");
+          } else if (res.status === 'pending') {
+              toast.error("Still awaiting payment transfer.");
           } else {
               toast.error("Status: " + res.status);
           }
       } catch (e) {
-          toast.error("Retry failed. Check network.");
+          toast.error("Sync failed. Check connection.");
       } finally {
           setRetryingId(null);
       }
@@ -56,7 +66,6 @@ export const Track: React.FC = () => {
 
   const handleDownloadReceipt = async (tx: Transaction) => {
       setReceiptTx(tx);
-      // Give React time to render the hidden component
       setTimeout(async () => {
           if (receiptRef.current) {
               try {
@@ -67,7 +76,6 @@ export const Track: React.FC = () => {
                   link.click();
                   toast.success("Receipt downloaded");
               } catch (err) {
-                  console.error('Receipt error', err);
                   toast.error("Failed to generate receipt");
               }
               setReceiptTx(null);
@@ -84,19 +92,18 @@ export const Track: React.FC = () => {
     }
   };
 
-  // Helper to get the specific item name for the receipt "Item Details"
   const getTransactionDescription = (tx: Transaction) => {
       if (tx.type === 'data') {
           if (tx.dataPlan) {
               return `${tx.dataPlan.network} ${tx.dataPlan.data} (${tx.dataPlan.validity})`;
           }
-          return 'Data Bundle'; // Fallback only if relation missing
+          return 'Data Bundle';
       }
       if (tx.type === 'ecommerce') {
           if (tx.product) {
               return tx.product.name;
           }
-          return 'Mobile Device'; // Fallback
+          return 'Mobile Device';
       }
       return 'Unknown Item';
   };
@@ -104,28 +111,27 @@ export const Track: React.FC = () => {
   return (
     <div className="p-6 pb-32 min-h-screen">
       <div className="mb-8">
-          <h1 className="text-2xl font-bold text-slate-900">Track Order</h1>
-          <p className="text-slate-500 text-sm mt-1">Check the status of your data or product orders.</p>
+          <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Order Tracking</h1>
+          <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Real-time gateway status verification</p>
       </div>
 
-      <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-100 border border-slate-100 mb-8">
+      <div className="bg-white p-6 rounded-[2rem] shadow-2xl shadow-slate-100 border border-slate-100 mb-8">
         <div className="space-y-4">
             <Input 
-                label="Phone Number"
-                className="h-12"
-                placeholder="Enter phone number used" 
+                label="Tracking Number / Phone"
+                className="h-14 rounded-2xl font-black tracking-tight text-lg"
+                placeholder="080..." 
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 type="tel"
             />
-            <Button onClick={handleTrack} isLoading={isLoading} className="h-12 bg-slate-900">
-                <Search className="w-4 h-4 mr-2" />
-                Track Now
+            <Button onClick={handleTrack} isLoading={isLoading} className="h-14 bg-slate-900 rounded-2xl shadow-xl shadow-slate-200">
+                <Search className="w-5 h-5 mr-3" />
+                Locate Records
             </Button>
         </div>
       </div>
 
-      {/* Shared Hidden Receipt */}
       {receiptTx && (
         <SharedReceipt 
             ref={receiptRef}
@@ -133,7 +139,7 @@ export const Track: React.FC = () => {
                 tx_ref: receiptTx.tx_ref,
                 amount: receiptTx.amount,
                 date: new Date(receiptTx.createdAt).toLocaleString(),
-                type: receiptTx.type === 'ecommerce' ? 'Devices' : 'Data Bundle',
+                type: receiptTx.type === 'ecommerce' ? 'Corporate Order' : 'Data Bundle',
                 description: getTransactionDescription(receiptTx),
                 status: receiptTx.status,
                 customerPhone: receiptTx.phone,
@@ -144,54 +150,49 @@ export const Track: React.FC = () => {
 
       {hasSearched && (
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">Recent Transactions</h3>
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2">Gateway Records</h3>
             {transactions.length > 0 ? (
-                <div className="space-y-3">
+                <div className="space-y-4">
                     {transactions.map((tx) => (
-                        <div key={tx.id} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-                            <div className="flex justify-between items-start mb-4">
+                        <div key={tx.id} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-lg shadow-slate-50 relative overflow-hidden group">
+                            {tx.status === 'delivered' && <CheckCircle2 className="absolute -right-4 -top-4 w-20 h-20 text-green-500/5 group-hover:rotate-12 transition-transform" />}
+                            
+                            <div className="flex justify-between items-start mb-6">
                                 <div>
-                                    <div className="text-sm font-bold text-slate-900 capitalize flex items-center gap-2">
-                                        {tx.type === 'ecommerce' ? 'Devices' : 'Data Bundle'}
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{tx.tx_ref}</p>
+                                    <div className="text-sm font-black text-slate-900 uppercase tracking-tight">
+                                        {getTransactionDescription(tx)}
                                     </div>
-                                    <div className="text-xs text-slate-600 font-medium mt-1">{getTransactionDescription(tx)}</div>
-                                    <div className="text-xs text-slate-400 mt-0.5">Ref: {tx.tx_ref.slice(0, 18)}...</div>
-                                    <div className="text-xs text-slate-500 mt-0.5">{new Date(tx.createdAt).toLocaleString()}</div>
+                                    <div className="text-[10px] text-slate-500 font-bold mt-1 uppercase">{new Date(tx.createdAt).toLocaleString()}</div>
                                 </div>
-                                <span className={cn("text-[10px] uppercase font-bold px-3 py-1 rounded-full", getStatusColor(tx.status))}>
+                                <span className={cn("text-[9px] uppercase font-black px-4 py-2 rounded-xl", getStatusColor(tx.status))}>
                                     {tx.status}
                                 </span>
                             </div>
 
-                            <div className="flex justify-between items-center pt-3 border-t border-slate-50">
-                                <div className="text-lg font-bold text-slate-900">{formatCurrency(tx.amount)}</div>
+                            <div className="flex justify-between items-center pt-4 border-t border-slate-50">
+                                <div className="text-xl font-black text-slate-900 tracking-tighter">{formatCurrency(tx.amount)}</div>
                                 
                                 <div className="flex gap-2">
-                                    {(tx.status === 'pending' || tx.status === 'failed' || (tx.type === 'data' && tx.status === 'paid')) && (
+                                    {tx.status !== 'delivered' && (
                                         <Button 
                                             variant="outline" 
                                             onClick={() => handleRetry(tx.tx_ref, tx.id)}
                                             disabled={retryingId === tx.id}
-                                            className="h-9 px-3 text-xs"
+                                            className="h-10 px-4 text-[10px] font-black uppercase tracking-widest rounded-xl border-slate-200"
                                         >
-                                            {retryingId === tx.id ? <Loader2 className="animate-spin w-3 h-3" /> : <RefreshCw className="w-3 h-3 mr-1" />}
-                                            {tx.status === 'paid' ? 'Retry Delivery' : 'Check Status'}
+                                            {retryingId === tx.id ? <Loader2 className="animate-spin w-4 h-4" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                                            Sync Now
                                         </Button>
-                                    )}
-
-                                    {tx.type === 'data' && tx.status === 'paid' && (
-                                        <div className="hidden sm:flex items-center text-xs text-red-500 font-medium bg-red-50 px-2 py-1 rounded-lg">
-                                            <AlertTriangle className="w-3 h-3 mr-1" /> Network Error
-                                        </div>
                                     )}
 
                                     {(tx.status === 'delivered' || (tx.type === 'ecommerce' && tx.status === 'paid')) && (
                                         <Button 
                                             variant="secondary" 
                                             onClick={() => handleDownloadReceipt(tx)}
-                                            className="h-9 px-3 text-xs bg-green-50 text-green-700 hover:bg-green-100"
+                                            className="h-10 px-4 text-[10px] font-black uppercase tracking-widest rounded-xl bg-slate-900 text-white shadow-xl shadow-slate-100"
                                         >
-                                            <Download className="w-3 h-3 mr-1" /> Receipt
+                                            <Download className="w-4 h-4 mr-2" /> Receipt
                                         </Button>
                                     )}
                                 </div>
@@ -200,8 +201,8 @@ export const Track: React.FC = () => {
                     ))}
                 </div>
             ) : (
-                <div className="text-center py-10 bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
-                    <p className="text-slate-400 text-sm">No transactions found for this number.</p>
+                <div className="text-center py-20 bg-slate-50 rounded-[2.5rem] border border-slate-100 border-dashed">
+                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">No matching records found.</p>
                 </div>
             )}
           </div>

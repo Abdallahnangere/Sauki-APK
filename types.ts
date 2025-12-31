@@ -6,7 +6,7 @@ export interface Product {
   price: number;
   image: string;
   inStock: boolean;
-  category: 'device' | 'sim'; // Added category
+  category: 'device' | 'sim' | 'package'; // Added package
 }
 
 export interface DataPlan {
