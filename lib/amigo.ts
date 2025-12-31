@@ -32,15 +32,15 @@ export const amigoClient = axios.create({
 });
 
 /**
- * NETWORK MAPPING (Crosscheck Verification)
- * This object maps the string values from your DB/UI ('MTN', 'AIRTEL')
- * to the specific integer IDs required by the Amigo API.
+ * NETWORK MAPPING (UPDATED based on API Error Log)
+ * The error log stated: "Network must be 1 (MTN) or 2 (Glo). Airtel(4)/9mobile(9)"
  */
 export const AMIGO_NETWORKS: Record<string, number> = {
-  'MTN': 1,      // User selects MTN -> Sends 1
-  'GLO': 2,      // User selects GLO -> Sends 2
-  'AIRTEL': 3,   // User selects AIRTEL -> Sends 3
-  '9MOBILE': 4
+  'MTN': 1,       // Standard ID for MTN
+  'GLO': 2,       // Standard ID for GLO
+  'AIRTEL': 4,    // UPDATED: API expects 4 for Airtel
+  '9MOBILE': 9,   // UPDATED: API expects 9 for 9mobile
+  'ETISALAT': 9   // Fallback alias
 };
 
 /**
